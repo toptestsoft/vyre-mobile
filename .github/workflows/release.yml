@@ -31,12 +31,12 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Release APK
-        run: flutter build apk --release --build-name=${{ github.ref_name }}
+      - name: Build Release APK (Split Per ABI)
+        run: flutter build apk --release --build-name=${{ github.ref_name }} --split-per-abi
 
       - name: Calculate SHA256 checksum
         run: |
-          SHA=$(sha256sum build/app/outputs/flutter-apk/app-release.apk | cut -d' ' -f1)
+          SHA=$(sha256sum build/app/outputs/flutter-apk/app-arm64-v8a-release.apk | cut -d' ' -f1)
           echo "SHA256=${SHA}" >> $GITHUB_ENV
 
       - name: Create GitHub Release
@@ -45,7 +45,10 @@ jobs:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: false
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x64-v8a-release.apk
 
       - name: Generate Appcast
         env:
@@ -58,5 +61,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add appcast.xml
-          git commit -m "Update appcast for ${{ github.ref_name }}" || echo "No changes"
+          git commit -m "Update appcast for ${{ github.ref_name }}" || echo "No changes to appcast"
           git push

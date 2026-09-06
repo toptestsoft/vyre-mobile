@@ -7,7 +7,10 @@ tag = sys.argv[1]
 version = tag.lstrip('v')
 sha = os.environ.get('SHA256', '')
 released = datetime.datetime.now().strftime('%Y-%m-%d')
-url = f'https://github.com/toptestsoft/vyre-mobile/releases/download/{tag}/app-release.apk'
+
+# Use the arm64-v8a APK as primary for appcast
+apk_filename = 'app-arm64-v8a-release.apk'
+url = f'https://github.com/toptestsoft/vyre-mobile/releases/download/{tag}/{apk_filename}'
 title = f'Version {version}'
 
 # Get file size via curl
