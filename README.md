@@ -7,12 +7,6 @@
 
 ---
 
-# 🛡️ VYRE Secure Access
-
-**VYRE Secure Access** — современный клиент для защищённого интернет-соединения на базе протокола VLESS с поддержкой Reality.
-
----
-
 ## 📸 Скриншоты
 
 | Главный экран (отключено) | Главный экран (включено) |
@@ -23,13 +17,26 @@
 
 ## ✨ Особенности
 
-- 🔒 **VLESS + Reality** — высокая производительность и скрытность
-- 📱 **Split Tunneling** — выборочное использование приложений
-- 📷 **QR-сканер** — быстрое подключение
-- 📋 **Подписки** — добавление, удаление, переключение
-- 🔄 **Автообновления** — через GitHub Releases
-- 🎨 **Glassmorphism** — современный дизайн
-- 🆓 **Бесплатно и без рекламы**
+- 🔒 VLESS + Reality — высокая производительность и скрытность
+- 📱 Split Tunneling — выборочное использование приложений
+- 📷 QR-сканер — быстрое подключение
+- 📋 Подписки — добавление, удаление, переключение
+- 🔄 Автообновления — через GitHub Releases
+- 🎨 Glassmorphism — современный дизайн
+- 🆓 Бесплатно и без рекламы
+
+---
+
+## 🧰 Технологии
+
+| Категория | Инструмент | Версия |
+|---|---|---|
+| Фреймворк | Flutter | 3.47+ |
+| Протокол | VLESS + Reality | Xray-core |
+| Сканирование | mobile_scanner (Camera) | ^7.4.0 |
+| Обновления | upgrader (GitHub Appcast) | ^13.7.0 |
+| Хранилище | shared_preferences + flutter_secure_storage | ^2.3.1 + ^9.2.2 |
+| HTTP | http | ^1.2.2 |
 
 ---
 
@@ -41,9 +48,9 @@
 
 ## ✨ Features
 
-- 🔒 **VLESS + Reality protocol** — High performance and connection stealth
+- 🔒 **VLESS + Reality protocol** — High performance and stealth
 - 📱 **Split Tunneling** — Selective app usage
-- 📷 **QR Scanner** — Fast connection via QR code
+- 📷 **QR Scanner** — Fast connection via QR
 - 📋 **Subscriptions** — Add, delete, switch
 - 🔄 **Auto-updates** — Via GitHub Releases
 - 🎨 **Glassmorphism Design** — Modern dark interface
@@ -75,7 +82,7 @@ flutter build apk --release
 4. Grant VPN connection permission
 
 ## 🔄 Updates
-App checks for new versions on startup. Tap **"Update"** to download and install.
+App checks for new versions on startup. Tap "Update" to download and install.
 
 ## 🛡️ Security & Privacy
 - All traffic is encrypted
@@ -88,4 +95,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 ## 📜 License
 Distributed under the MIT License. See [LICENSE](LICENSE).
 
-**Questions and suggestions:** [Issues](https://github.com/toptestsoft/vyre-mobile/issues)
+**Security vulnerabilities?** See [SECURITY.md](SECURITY.md).
+**Privacy Policy?** See [PRIVACY.md](PRIVACY.md).
+
+**Issues:** [GitHub Issues](https://github.com/toptestsoft/vyre-mobile/issues)
