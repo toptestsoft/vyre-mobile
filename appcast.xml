@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0" xmlns:sparkle="http://purl.org/rss/1.0/modules/sparkle/">
-  <channel>
-    <title>VYRE Mobile Updates</title>
-    <link>https://github.com/toptestsoft/vyre-mobile</link>
-    <description>Appcast feed for VYRE mobile application.</description>
-    <language>en</language>
-  </channel>
-</rss>
