@@ -1,0 +1,33 @@
+# Flutter
+/.dart_tool/
+/build/
+/flutter_export_environment.sh
+/flutter_plugins/
+/flutter_service_configuration
+/hooks/
+/ios/ flutter_export_environment.sh
+/pub-cache/
+/pubspec.lock
+/flutter-plugins-dependencies
+/packages/
+
+# Android
+/android/.gradle/
+/android/app/src/main/assets/
+/android/key.properties
+/android/.env
+/app-release.apk
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
