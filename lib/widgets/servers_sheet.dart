@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:vyre/utils/constants.dart';
-import 'package:vyre/models/subscription.dart';
+import '../utils/constants.dart';
+import '../models/subscription.dart';
 
 class ServersSheet extends StatelessWidget {
   final List<ServerRow> servers;

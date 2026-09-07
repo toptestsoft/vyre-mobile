@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:vyre/utils/constants.dart';
-import 'package:vyre/widgets/glass_card.dart';
-import 'package:vyre/models/subscription.dart';
+import '../utils/constants.dart';
+import 'glass_card.dart';
+import '../models/subscription.dart';
 
 // ─── SubscriptionsSheet ───
 class SubscriptionsSheet extends StatefulWidget {
@@ -32,7 +32,7 @@ class _SubscriptionsSheetState extends State<SubscriptionsSheet> {
     return Container(
       height: 500,
       decoration: BoxDecoration(
-        color: kSurface.withOpacity(0.95),
+        color: kSurface.withValues(alpha: 0.95),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: const Border(top: BorderSide(color: kGlassBorder)),
       ),
@@ -118,11 +118,12 @@ class _SubscriptionsSheetState extends State<SubscriptionsSheet> {
                 final url = await _promptForSubscription(context);
                 if (url != null && url.isNotEmpty) {
                   widget.onAdd(url);
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                 }
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: kAccentCyan.withOpacity(0.15),
+                backgroundColor: kAccentCyan.withValues(alpha: 0.15),
                 foregroundColor: kAccentCyan,
                 minimumSize: const Size.fromHeight(48),
               ),

@@ -164,6 +164,7 @@ class UpdateService {
             onPressed: () async {
               Navigator.pop(context);
               final url = await getDownloadUrlForDevice();
+              if (!context.mounted) return;
               if (url != null) {
                 await downloadAndInstallApk(context, url);
               } else {

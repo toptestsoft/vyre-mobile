@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:vyre/utils/constants.dart';
+import '../utils/constants.dart';
 
 // ─── GlassCard ───
 class GlassCard extends StatelessWidget {
@@ -39,7 +39,7 @@ class GlassCard extends StatelessWidget {
               border: border ?? Border.all(color: kGlassBorder, width: 1),
               boxShadow: shadows ?? [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withValues(alpha: 0.2),
                   blurRadius: 24,
                   offset: const Offset(0, 8),
                 ),
@@ -121,10 +121,10 @@ class AmbientOrb extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: (color ?? kAccentCyan).withOpacity(opacity),
+        color: (color ?? kAccentCyan).withValues(alpha: opacity),
         boxShadow: [
           BoxShadow(
-            color: (color ?? kAccentCyan).withOpacity(opacity),
+            color: (color ?? kAccentCyan).withValues(alpha: opacity),
             blurRadius: 60,
             spreadRadius: 10,
           ),

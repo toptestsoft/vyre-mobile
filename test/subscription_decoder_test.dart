@@ -13,7 +13,7 @@ void main() {
     expect(SubscriptionDecoder.decode(enc), contains('vless://'));
   });
   test('BOM отбрасывается', () {
-    final raw = '\uFEFF' + base64Encode(utf8.encode('ss://z'));
+    final raw = '\uFEFF${base64Encode(utf8.encode('ss://z'))}';
     expect(SubscriptionDecoder.decode(raw), contains('ss://'));
   });
   test('мусор возвращает исходный текст', () {

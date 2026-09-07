@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:vyre/utils/constants.dart';
-import 'package:vyre/widgets/glass_card.dart';
+import '../utils/constants.dart';
+import 'glass_card.dart';
 
 class BentoStatus extends StatelessWidget {
   final bool connected;
@@ -35,8 +35,8 @@ class BentoStatus extends StatelessWidget {
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  statusGlow.withOpacity(0.8),
-                  statusGlow.withOpacity(0.4),
+                  statusGlow.withValues(alpha: 0.8),
+                  statusGlow.withValues(alpha: 0.4),
                   Colors.transparent,
                 ],
               ),

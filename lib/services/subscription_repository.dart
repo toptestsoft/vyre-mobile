@@ -6,9 +6,7 @@ import '../models/subscription.dart';
 
 /// Хранилище подписок. UI не знает, где лежат данные.
 class SubscriptionRepository {
-  static const _secure = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  static const _secure = FlutterSecureStorage();
   static const _kSubs = 'subscriptions_secure';
   static const _kActive = 'active_subscription_id_secure';
 

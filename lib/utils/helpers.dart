@@ -22,7 +22,9 @@ class SubscriptionDecoder {
     if (!text.contains('://') && !text.contains('{')) {
       try {
         String normalized = text.replaceAll(RegExp(r'[\s\r\n]+'), '');
-        while (normalized.length % 4 != 0) normalized += '=';
+        while (normalized.length % 4 != 0) {
+          normalized += '=';
+        }
         normalized = normalized.replaceAll('-', '+').replaceAll('_', '/');
         text = utf8.decode(base64Decode(normalized));
       } catch (_) {}
