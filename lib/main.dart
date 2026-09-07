@@ -14,6 +14,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 // ─── Импорты вынесенных модулей ───────────────────────────
 import 'models/subscription.dart';          // ServerRow, SubscriptionItem
+import 'models/vpn_state.dart';              // VpnState enum, ServerStatus, ParseResult
+import 'services/server_selector.dart';      // ServerSelector
 import 'utils/constants.dart';              // цвета, строки
 import 'utils/helpers.dart';                // getUserFriendlyError
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
@@ -97,6 +99,24 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   bool get _isConnecting => _vpnState.isBusy;
   String get _statusText => _vpnLabel(_vpnState);
   static const ServerSelector _selector = ServerSelector();
+
+  String _vpnLabel(VpnState s) => switch (s) {
+        VpnState.initializing => 'Инициализация…',
+        VpnState.disconnected => 'Отключено',
+        VpnState.testing => 'Проверка серверов…',
+        VpnState.connecting => 'Подключение…',
+        VpnState.connected => 'Подключено',
+        VpnState.disconnecting => 'Отключение…',
+        VpnState.error => 'Ошибка',
+      };
+
+  VpnState _mapStatusToVpnState(String raw) => switch (raw) {
+        'CONNECTED' => VpnState.connected,
+        'CONNECTING' => VpnState.connecting,
+        'DISCONNECTING' => VpnState.disconnecting,
+        'DISCONNECTED' => _vpnState != VpnState.error ? VpnState.disconnected : _vpnState,
+        _ => _vpnState,
+      };
   bool _isInitialized = false;
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
   int _connectGeneration = 0;   // токен поколения операции подключения
@@ -129,8 +149,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       onStatusChanged: (status) {
         if (!mounted) return;
         setState(() {
-          _connected = status.state == 'CONNECTED';
-          _statusText = _connLabel(status.state);
+          _vpnState = _mapStatusToVpnState(status.state);
         });
         _syncPulse();
       },
@@ -472,15 +491,13 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     bool stale() => gen != _connectGeneration || _disposed || !mounted;
     setState(() {
       _error = '';
-      _testing = false;
       _servers = [];
-      _isConnecting = true;
+      _vpnState = VpnState.testing;
     });
 
     if (!_isInitialized) {
       setState(() {
         _error = 'Движок не инициализирован';
-        _isConnecting = false;
       });
       return;
     }
@@ -489,7 +506,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     if (subUrl.isEmpty) {
       setState(() {
         _error = 'Введите ссылку подписки';
-        _isConnecting = false;
       });
       return;
     }
@@ -498,7 +514,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     _addSubscription(subUrl);
 
     try {
-      setState(() => _testing = true);
+      setState(() { _vpnState = VpnState.testing; });
       _syncPulse();
 
       final lower = subUrl.toLowerCase();
@@ -548,7 +564,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _servers = sortedRows;
-        _testing = false;
+        _vpnState = VpnState.disconnected;
       });
       _syncPulse();
 
@@ -569,10 +585,14 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       final granted = await _v2ray.requestPermission();
       if (!mounted) return;
       if (!granted) {
-        setState(() => _error = 'Нет прав на VPN (отклонено)');
+        setState(() {
+          _error = 'Нет прав на VPN (отклонено)';
+          _vpnState = VpnState.error;
+        });
         return;
       }
 
+      setState(() { _vpnState = VpnState.connecting; });
       await _v2ray.startV2Ray(
         remark: best.remark.isEmpty ? 'VYRE' : best.remark,
         config: best.config,
@@ -582,11 +602,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _error = e is SubException ? e.message : getUserFriendlyError(e);
-        _testing = false;
+        _vpnState = VpnState.error;
       });
       _syncPulse();
     } finally {
-      if (mounted) setState(() => _isConnecting = false);
+      if (mounted) setState(() { _vpnState = VpnState.disconnected; });
     }
   }
 
