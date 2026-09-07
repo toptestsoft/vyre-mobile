@@ -1,5 +1,4 @@
 import '../models/subscription.dart'; // ServerRow
-import '../models/vpn_state.dart';    // ServerStatus
 
 /// Чистая, тестируемая логика выбора сервера. Никакого UI и VPN.
 class ServerSelector {

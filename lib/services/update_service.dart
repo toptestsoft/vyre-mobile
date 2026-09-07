@@ -92,14 +92,10 @@ class UpdateService {
         throw Exception('Ошибка скачивания: ${response.statusCode}');
       }
 
-      final contentLength = response.contentLength ?? 0;
-      var downloaded = 0;
-
       final sink = file.openWrite();
       await response.listen(
         (chunk) {
           sink.add(chunk);
-          downloaded += chunk.length;
         },
         onDone: () => sink.close(),
         onError: (e) => sink.close(),
