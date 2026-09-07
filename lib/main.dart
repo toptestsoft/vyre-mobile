@@ -89,13 +89,15 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   final TextEditingController _subController = TextEditingController();
 
   // ─── Состояние VPN ──────────────────────────────────────────
-  bool _connected = false;
-  String _statusText = 'Отключено';
   List<ServerRow> _servers = [];
   String _error = '';
-  bool _testing = false;
+  VpnState _vpnState = VpnState.initializing;
+  bool get _connected => _vpnState.isConnected;
+  bool get _testing => _vpnState == VpnState.testing;
+  bool get _isConnecting => _vpnState.isBusy;
+  String get _statusText => _vpnLabel(_vpnState);
+  static const ServerSelector _selector = ServerSelector();
   bool _isInitialized = false;
-  bool _isConnecting = false;   // 🔒 блокировка повторных нажатий
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
 
   List<AppInfo> _allApps = [];
