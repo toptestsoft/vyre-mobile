@@ -99,6 +99,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   static const ServerSelector _selector = ServerSelector();
   bool _isInitialized = false;
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
+  int _connectGeneration = 0;   // токен поколения операции подключения
 
   List<AppInfo> _allApps = [];
   Set<String> _vpnRoutedPackages = {}; // приложения, которые пускаем через VPN
@@ -438,6 +439,8 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   // ─── Основной метод подключения ───────────────────────────
   Future<void> _connect() async {
     if (!mounted || _isConnecting) return;
+    final gen = ++_connectGeneration;   // все прошлые операции устарели
+    bool stale() => gen != _connectGeneration || _disposed || !mounted;
     setState(() {
       _error = '';
       _testing = false;
@@ -559,6 +562,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   }
 
   Future<void> _disconnect() async {
+    _connectGeneration++; // отменяем незавершённые операции
     try {
       await _v2ray.stopV2Ray();
       _syncPulse();
