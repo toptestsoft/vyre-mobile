@@ -5,8 +5,8 @@
 ![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-blue)
 [![CI](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter-ci.yml/badge.svg?branch=main)](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter-ci.yml)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Flutter](https://img.shields.io/badge/Flutter-≥3.24-blue)
-![Dart](https://img.shields.io/badge/Dart-≥3.5-blue)
+![Flutter](https://img.shields.io/badge/Flutter-≥3.29-blue)
+![Dart](https://img.shields.io/badge/Dart-≥3.7-blue)
 [![GitHub Release](https://img.shields.io/github/v/release/toptestsoft/vyre-mobile?color=green&label=Release)](https://github.com/toptestsoft/vyre-mobile/releases/latest)
 
 <!-- TODO: Add CI badge after setting up GitHub Actions -->
