@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:vyre/utils/constants.dart';
+import '../utils/constants.dart';
 
 class UpdateService {
   static const String _repo = 'toptestsoft/vyre-mobile';

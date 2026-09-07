@@ -3,10 +3,9 @@ import '../models/vpn_state.dart';
 
 /// Единственная точка контакта с движком VPN.
 class VpnService {
-  VpnService({required void Function(VpnState state, String rawState) onStateChanged})
-      : _onStateChanged = onStateChanged;
+  VpnService({required this.onStateChanged});
 
-  final void Function(VpnState state, String rawState) _onStateChanged;
+  final void Function(VpnState state, String rawState) onStateChanged;
   late final FlutterV2ray _v2ray;
   bool _initialized = false;
   bool get isInitialized => _initialized;
@@ -14,7 +13,7 @@ class VpnService {
   Future<void> initialize() async {
     _v2ray = FlutterV2ray(
       onStatusChanged: (status) {
-        _onStateChanged(_mapState(status.state), status.state);
+        onStateChanged(_mapState(status.state), status.state);
       },
     );
     await _v2ray.initializeV2Ray();
