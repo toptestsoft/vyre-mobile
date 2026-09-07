@@ -42,16 +42,34 @@ class SubscriptionService {
   }
 
   Future<String> _fetchOnce(String url) async {
-    final resp = await http
-        .get(Uri.parse(url), headers: {'User-Agent': 'VYRE/2.0'})
+    final response = await http.Client()
+        .send(http.Request('GET', Uri.parse(url))
+          ..followRedirects = false
+          ..headers['User-Agent'] = 'VYRE/2.0')
+        .then((r) => http.Response.fromStream(r))
         .timeout(const Duration(seconds: 15));
-    if (resp.statusCode != 200) {
-      throw SubscriptionException('Ошибка загрузки подписки: ${resp.statusCode}');
+
+    if (response.isRedirect) {
+      final loc = response.headers['location'];
+      final target = loc == null ? null : Uri.parse(url).resolve(loc);
+      if (target == null || !(target.scheme == 'https' || target.scheme == 'http')) {
+        throw SubscriptionException('Подписка редиректит на небезопасный адрес');
+      }
+      return _fetchOnce(target.toString());
     }
-    if (resp.bodyBytes.length > 5 * 1024 * 1024) {
+
+    final ct = response.headers['content-type'] ?? '';
+    if (ct.contains('text/html')) {
+      throw SubscriptionException('Сервер вернул HTML вместо подписки (капча/блок?)');
+    }
+
+    if (response.statusCode != 200) {
+      throw SubscriptionException('Ошибка загрузки подписки: ${response.statusCode}');
+    }
+    if (response.bodyBytes.length > 5 * 1024 * 1024) {
       throw SubscriptionException('Ответ слишком большой');
     }
-    return resp.body;
+    return response.body;
   }
 
   /// Декодирование + построчный парсинг с подсчётом брака.
