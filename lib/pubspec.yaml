@@ -1,5 +1,5 @@
-name: veil
-description: "A new Flutter project."
+name: vyre
+description: "VYRE VPN — защищённое подключение к интернету"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,10 +16,10 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
-  sdk: ^3.13.2
+  sdk: ^3.6.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -39,8 +39,16 @@ dependencies:
   flutter_v2ray: ^1.0.10
   installed_apps: ^2.1.1
   shared_preferences: ^2.3.2
+  url_launcher: ^6.2.5
   http: ^1.2.2
-  mobile_scanner: ^7.4.0
+  mobile_scanner: ^6.0.8
+  device_info_plus: ^11.1.0
+  # Auto-update + app info
+  xml: ^6.5.0
+  package_info_plus: ^9.0.1
+  flutter_secure_storage: ^10.3.1
+  connectivity_plus: ^7.3.1
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
@@ -51,7 +59,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
