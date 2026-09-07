@@ -41,14 +41,14 @@ dependencies:
   shared_preferences: ^2.3.2
   url_launcher: ^6.2.5
   http: ^1.2.2
-  mobile_scanner: ^7.4.0
+  mobile_scanner: ^6.0.8
   device_info_plus: ^11.1.0
   # Auto-update + app info
   xml: ^6.5.0
   package_info_plus: ^9.0.1
   flutter_secure_storage: ^10.3.1
   connectivity_plus: ^7.3.1
-  path_provider: ^2.1.6
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
@@ -59,7 +59,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^6.0.0
+  flutter_lints: ^5.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
