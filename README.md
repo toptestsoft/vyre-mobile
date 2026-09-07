@@ -4,83 +4,54 @@
 
 ![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
-![Flutter](https://img.shields.io/badge/Flutter-3.x-blue)
+![Flutter](https://img.shields.io/badge/Flutter-≥3.24-blue)
+![Dart](https://img.shields.io/badge/Dart-≥3.5-blue)
+[![GitHub Release](https://img.shields.io/github/v/release/toptestsoft/vyre-mobile?color=green&label=Release)](https://github.com/toptestsoft/vyre-mobile/releases/latest)
 
-## О приложении
+<!-- TODO: Add CI badge after setting up GitHub Actions -->
+<!-- ![Build](https://img.shields.io/github/actions/workflow/status/toptestsoft/vyre-mobile/flutter-ci.yml?branch=main) -->
 
-VYRE VPN — мобильное приложение для подключения к VPN-серверам по подписке. Поддерживает подписки через Telegram Stars и USDT (TRC20).
+## 📱 Screenshots
 
-## Скачать
+<p float="left">
+  <img src="screenshots/home.png" width="240" alt="Главный экран" />
+</p>
 
-Готовые APK для Android доступны в [Releases](https://github.com/toptestsoft/vyre-mobile/releases).
+## ✨ Features
 
-| Архитектура | Файл | Размер |
-|-------------|------|--------|
-| arm64-v8a | `vyre-arm64-v8a-release.apk` | ~28 MB |
-| armeabi-v7a | `vyre-armeabi-v7a-release.apk` | ~28 MB |
-| x86_64 | `vyre-x86_64-release.apk` | ~30 MB |
+- **Быстрое подключение** — один тап для подключения к лучшему серверу
+- **Несколько локаций** — выбор из 3+ серверов с задержкой и пингом
+- **Двойная оплата** — Telegram Stars и USDT (CryptoBot)
+- **Secure Storage** — подписки хранятся зашифрованно на устройстве
+- **Split-tunneling** — выборочный роутинг трафика *(в разработке)*
+- **Автообновление** — проверка обновлений через GitHub Releases
+- **Без логов** — политика конфиденциальности: никаких данных не собирается
 
-## Установка
+## 🚀 Roadmap
 
-1. Скачайте APK нужной архитектуры из [Releases](https://github.com/toptestsoft/vyre-mobile/releases/tag/v1.1.0)
-2. Разрешите установку из неизвестных источников
-3. Установите и откройте приложение
+- [x] Android (arm64, armeabi, x86_64)
+- [ ] iOS
+- [ ] Локализация (i18n: EN, RU, ZH)
+- [ ] Sentry crash reporting
+- [ ] Split-tunneling
 
-## Для разработчиков
+## 🔒 Privacy
 
-### Требования
+См. [PRIVACY.md](PRIVACY.md) — никакие данные не собираются.
 
-- Flutter SDK 3.x
-- Android SDK
+## 📦 Download
 
-### Сборка
+📥 [Скачать APK v1.1.0](https://github.com/toptestsoft/vyre-mobile/releases/tag/v1.1.0)
+
+Требуется Android 6.0+ (API 23).
+
+## 🛠️ Build
 
 ```bash
 flutter pub get
 flutter build apk --release --split-per-abi
 ```
 
-APK появятся в `build/app/outputs/flutter-apk/`.
+## 📄 License
 
-### Структура проекта
-
-```
-lib/
-  main.dart              # Точка входа, UI
-  models/                # Модели данных
-    vpn_state.dart       # VpnState enum
-    subscription.dart     # SubscriptionItem, ServerRow
-  services/              # Бизнес-логика
-    vpn_service.dart     # FlutterV2ray обёртка
-    subscription_service.dart  # Загрузка/парсинг подписок
-    subscription_repository.dart # Персистенция подписок
-    subscription_cache.dart    # Офлайн-кэш
-    server_selector.dart # Выбор сервера по пингу
-    update_service.dart  # Проверка обновлений
-  utils/
-    constants.dart       # Цвета, строки, константы
-    helpers.dart         # Утилиты
-  widgets/               # Переиспользуемые виджеты
-    glass_card.dart
-    bento_status.dart
-    servers_sheet.dart
-    subscriptions_sheet.dart
-```
-
-### Тесты
-
-```bash
-flutter test
-```
-
-## Авто-обновление
-
-Приложение проверяет обновления через GitHub Releases. Кнопка **"Проверить обновления"** доступна в разделе *VYRE*.
-
-## Бот поддержки
-
-[@VYREPayBot](https://t.me/VYREPayBot) — бот для покупки подписок через Telegram Stars или USDT.
-
-## Лицензия
-
-MIT
+MIT — см. [LICENSE](LICENSE).

@@ -328,13 +328,22 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _checkForUpdates() async {
+    final uri = Uri.parse('https://github.com/toptestsoft/vyre-mobile/releases');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      setState(() => _error = 'Не удалось открыть страницу обновлений');
+    }
+  }
+
   void _showAboutApp() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0a0a1a),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('О VYRE', style: TextStyle(color: Colors.white)),
+        title: const Text('VYRE', style: TextStyle(color: Colors.white)),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,6 +361,13 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('ОК', style: TextStyle(color: kAccentCyan)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _checkForUpdates();
+            },
+            child: const Text('Проверить обновления', style: TextStyle(color: kAccentPurple)),
           ),
         ],
       ),
@@ -1064,8 +1080,9 @@ class _SubscriptionsSheetState extends State<_SubscriptionsSheet> {
                                   onTap: () {
                                     showDialog(
                                       context: ctx,
+                                      barrierColor: Colors.black.withValues(alpha: 0.6),
                                       builder: (ctx2) => AlertDialog(
-                                        backgroundColor: kGlass,
+                                        backgroundColor: const Color(0xFF0a0a1a),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                         title: const Text('Удалить подписку?', style: TextStyle(color: Colors.white)),
                                         content: Text('${s.name}\n${s.url}', style: const TextStyle(color: kTextSecondary)),
