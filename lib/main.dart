@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/services.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
+import 'services/vpn_service.dart';
+import 'services/subscription_repository.dart';
+import 'services/subscription_service.dart';
+import 'services/subscription_cache.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 // ─── Импорты вынесенных модулей ───────────────────────────
 import 'models/subscription.dart';          // ServerRow, SubscriptionItem
 import 'models/vpn_state.dart';              // VpnState enum, ServerStatus, ParseResult
-import 'services/server_selector.dart';      // ServerSelector
 import 'utils/constants.dart';              // цвета, строки
 import 'utils/helpers.dart';                // getUserFriendlyError
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
@@ -87,7 +88,7 @@ class VYREHome extends StatefulWidget {
 }
 
 class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
-  late final FlutterV2ray _v2ray;
+  late final VpnService _vpn;
   final TextEditingController _subController = TextEditingController();
 
   // ─── Состояние VPN ──────────────────────────────────────────
@@ -98,7 +99,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   bool get _testing => _vpnState == VpnState.testing;
   bool get _isConnecting => _vpnState.isBusy;
   String get _statusText => _vpnLabel(_vpnState);
-  static const ServerSelector _selector = ServerSelector();
 
   String _vpnLabel(VpnState s) => switch (s) {
         VpnState.initializing => 'Инициализация…',
@@ -110,16 +110,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         VpnState.error => 'Ошибка',
       };
 
-  VpnState _mapStatusToVpnState(String raw) => switch (raw) {
-        'CONNECTED' => VpnState.connected,
-        'CONNECTING' => VpnState.connecting,
-        'DISCONNECTING' => VpnState.disconnecting,
-        'DISCONNECTED' => _vpnState != VpnState.error ? VpnState.disconnected : _vpnState,
-        _ => _vpnState,
-      };
+  final SubscriptionRepository _repo = SubscriptionRepository();
+  late final SubscriptionService _subs = SubscriptionService(_subCache);
+  final SubscriptionCache _subCache = SubscriptionCache();
   bool _isInitialized = false;
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
-  int _connectGeneration = 0;   // токен поколения операции подключения
 
   List<AppInfo> _allApps = [];
   Set<String> _vpnRoutedPackages = {}; // приложения, которые пускаем через VPN
@@ -145,12 +140,10 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _v2ray = FlutterV2ray(
-      onStatusChanged: (status) {
+    _vpn = VpnService(
+      onStateChanged: (state, raw) {
         if (!mounted) return;
-        setState(() {
-          _vpnState = _mapStatusToVpnState(status.state);
-        });
+        setState(() => _vpnState = state);
         _syncPulse();
       },
     );
@@ -188,8 +181,8 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   // ─── Единая загрузка настроек ─────────────────────────────
   Future<void> _loadPreferences() async {
-    final subs = await _readSubscriptions();
-    final id = await _readActiveId(subs);
+    final subs = await _repo.loadAll();
+    final id = await _repo.loadActiveId(subs);
     if (!mounted) return;
     setState(() {
       _subscriptions = subs;
@@ -200,24 +193,9 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     });
   }
 
-  Future<List<SubscriptionItem>> _readSubscriptions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = prefs.getStringList('subscriptions') ?? [];
-    return jsonList
-        .map((j) => SubscriptionItem.fromJson(json.decode(j) as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<String?> _readActiveId(List<SubscriptionItem> subs) async {
-    final prefs = await SharedPreferences.getInstance();
-    final id = prefs.getString('active_subscription_id');
-    if (id != null && subs.any((s) => s.id == id)) return id;
-    return null;
-  }
-
   Future<void> _initEngine() async {
     try {
-      await _v2ray.initializeV2Ray();
+      await _vpn.initialize();
       if (!mounted) return;
       setState(() => _isInitialized = true);
     } catch (e) {
@@ -259,10 +237,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   // ─── Подписки: единые точки изменения ──────────────────────
   void _saveSubscriptions() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = _subscriptions.map((s) => json.encode(s.toJson())).toList();
-    await prefs.setStringList('subscriptions', jsonList);
-    await prefs.setString('active_subscription_id', _activeSubscriptionId ?? '');
+    await _repo.saveAll(_subscriptions, _activeSubscriptionId);
   }
 
   void _activateSubscription(String id) {
@@ -320,23 +295,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   String _generateId() =>
       '${DateTime.now().millisecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}';
 
-  // ─── Вспомогательные методы ──────────────────────────────
-  String _connLabel(String s) {
-    switch (s) {
-      case 'CONNECTED':
-        return 'Подключено';
-      case 'CONNECTING':
-        return 'Подключение…';
-      case 'DISCONNECTING':
-        return 'Отключение…';
-      case 'CONNECTED_NOT':
-      case 'DISCONNECTED_NOT':
-        return 'Статус неизвестен';
-      case 'DISCONNECTED':
-      default:
-        return 'Отключено';
-    }
-  }
 
   /// Центральное управление пульсацией: безопасно при dispose и повторных вызовах.
   void _syncPulse() {
@@ -400,95 +358,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
-  // ─── Парсер (с валидацией и логом пропусков) ───────────────
-  List<V2RayURL> _parseInput(String body, {required bool isSingleLink}) {
-    if (isSingleLink) {
-      try {
-        return [FlutterV2ray.parseFromURL(body)];
-      } catch (_) {
-        return [];
-      }
-    }
-    String text = body.trim();
-    if (!text.contains('://') && !text.contains('{')) {
-      try {
-        String normalized = text.replaceAll(RegExp(r'[\s\r\n]+'), '');
-        while (normalized.length % 4 != 0) {
-          normalized += '=';
-        }
-        normalized = normalized.replaceAll('-', '+').replaceAll('_', '/');
-        text = utf8.decode(base64Decode(normalized));
-      } catch (e) {
-        debugPrint('VYRE: base64-декодирование не удалось, парсим как есть: $e');
-      }
-    }
-    final urls = <V2RayURL>[];
-    int skipped = 0;
-    for (final line in text.split(RegExp(r'[\r\n]+'))) {
-      final t = line.trim();
-      if (t.isEmpty) continue;
-      try {
-        urls.add(FlutterV2ray.parseFromURL(t));
-      } catch (_) {
-        skipped++;
-      }
-    }
-    if (skipped > 0) debugPrint('VYRE: пропущено невалидных строк: $skipped');
-    return urls;
-  }
 
-  // ─── Загрузка подписки с одним ретраем ─────────────────────
-  Future<String> _fetchSubscription(String url) async {
-    Object? lastError;
-    for (int attempt = 1; attempt <= 2; attempt++) {
-      try {
-        return await _fetchOnce(url, attempt: attempt);
-      } on SubException {
-        rethrow; // бизнес-ошибки не ретраим
-      } catch (e) {
-        lastError = e;
-        if (attempt == 1) await Future.delayed(const Duration(milliseconds: 800));
-      }
-    }
-    throw SubException('Не удалось загрузить подписку: $lastError');
-  }
-
-  Future<String> _fetchOnce(String url, {required int attempt}) async {
-    final response = await http.Client()
-        .send(http.Request('GET', Uri.parse(url))
-          ..followRedirects = false
-          ..headers['User-Agent'] = 'VYRE/2.0')
-        .then((r) => http.Response.fromStream(r))
-        .timeout(const Duration(seconds: 15));
-
-    if (response.isRedirect) {
-      final loc = response.headers['location'];
-      final target = loc == null ? null : Uri.parse(url).resolve(loc);
-      if (target == null || !(target.scheme == 'https' || target.scheme == 'http')) {
-        throw SubException('Подписка редиректит на небезопасный адрес');
-      }
-      return _fetchOnce(target.toString(), attempt: attempt);
-    }
-
-    final ct = response.headers['content-type'] ?? '';
-    if (ct.contains('text/html')) {
-      throw SubException('Сервер вернул HTML вместо подписки (капча/блок?)');
-    }
-
-    if (response.statusCode != 200) {
-      throw SubException('Ошибка загрузки подписки: ${response.statusCode}');
-    }
-    if (response.bodyBytes.length > 5 * 1024 * 1024) {
-      throw SubException('Ответ слишком большой');
-    }
-    return response.body;
-  }
 
   // ─── Основной метод подключения ───────────────────────────
   Future<void> _connect() async {
     if (!mounted || _isConnecting) return;
-    final gen = ++_connectGeneration;   // все прошлые операции устарели
-    bool stale() => gen != _connectGeneration || _disposed || !mounted;
     setState(() {
       _error = '';
       _servers = [];
@@ -517,20 +391,17 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       setState(() { _vpnState = VpnState.testing; });
       _syncPulse();
 
+      final bool isSingle = SubscriptionService.isSingleLink(subUrl);
       final lower = subUrl.toLowerCase();
-      final String body;
-      const schemes = [
-        'vless://', 'vmess://', 'trojan://', 'ss://', 'socks://', 'hy2://', 'hysteria://'
-      ];
-      final bool isSingleLink = schemes.any((s) => lower.startsWith(s));
+      String body;
 
       if (lower.startsWith('http://') || lower.startsWith('https://')) {
-        body = await _fetchSubscription(subUrl);
+        body = await _subs.fetch(subUrl);
       } else {
         body = subUrl;
       }
 
-      final List<V2RayURL> parsed = _parseInput(body, isSingleLink: isSingleLink);
+      final List<V2RayURL> parsed = _subs.parseToV2RayUrls(body, isSingleLink: isSingle);
       if (parsed.isEmpty) {
         throw SubException('Подписка не содержит серверов');
       }
@@ -546,7 +417,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             final cfg = p.getFullConfiguration();
             int ms = -1;
             try {
-              ms = await _v2ray.getServerDelay(config: cfg);
+              ms = await _vpn.pingServer(cfg);
             } catch (_) {}
             rows.add(ServerRow(remark: p.remark, config: cfg, delayMs: ms));
           }),
@@ -582,7 +453,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             .toList();
       }
 
-      final granted = await _v2ray.requestPermission();
+      final granted = await _vpn.requestPermission();
       if (!mounted) return;
       if (!granted) {
         setState(() {
@@ -593,7 +464,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       }
 
       setState(() { _vpnState = VpnState.connecting; });
-      await _v2ray.startV2Ray(
+      await _vpn.connect(
         remark: best.remark.isEmpty ? 'VYRE' : best.remark,
         config: best.config,
         blockedApps: blockedAppsList,
@@ -611,9 +482,8 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   }
 
   Future<void> _disconnect() async {
-    _connectGeneration++; // отменяем незавершённые операции
     try {
-      await _v2ray.stopV2Ray();
+      await _vpn.disconnect();
       _syncPulse();
     } catch (e) {
       if (!mounted) return;

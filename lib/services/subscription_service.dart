@@ -101,4 +101,10 @@ class SubscriptionService {
   }
 
   V2RayURL parseOne(String line) => FlutterV2ray.parseFromURL(line);
+
+  /// Адаптер: возвращает List<V2RayURL> для совместимости со State.
+  List<V2RayURL> parseToV2RayUrls(String body, {required bool isSingleLink}) {
+    final result = parse(body, isSingleLink: isSingleLink);
+    return result.servers.cast<V2RayURL>();
+  }
 }
