@@ -24,7 +24,7 @@ jobs:
           channel: 'stable'
 
       - run: flutter pub get
-      - run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - run: flutter analyze
 
   test:
     name: flutter test
