@@ -2,7 +2,7 @@
 
 **Безопасный, приватный и современный VPN-клиент для Android**
 
-[![CI Status](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter.yml/badge.svg)](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter.yml)
+[![CI Status](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter-ci.yml/badge.svg)](https://github.com/toptestsoft/vyre-mobile/actions/workflows/flutter-ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/toptestsoft/vyre-mobile?label=Latest%20Release&color=brightgreen)](https://github.com/toptestsoft/vyre-mobile/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 ![Flutter](https://img.shields.io/badge/Flutter-3.27+-02569B?logo=flutter&logoColor=white)
