@@ -8,6 +8,7 @@ import 'services/vpn_service.dart';
 import 'services/subscription_repository.dart';
 import 'services/subscription_service.dart';
 import 'services/subscription_cache.dart';
+import 'services/update_service.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -312,15 +313,14 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     }
   }
 
-  // ─── Telegram Bot Link ─────────────────────────────────────
-  Future<void> _openTelegram() async {
-    final uri = Uri.parse('https://t.me/$kTelegramBot');
+  Future<void> _openTelegramChannel() async {
+    final uri = Uri.parse('https://t.me/$kTelegramChannel');
     try {
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        setState(() => _error = 'Не удалось открыть Telegram');
+        setState(() => _error = 'Не удалось открыть Telegram-канал');
       }
     } catch (e) {
       if (!mounted) return;
@@ -328,12 +328,35 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     }
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message, style: TextStyle(color: Colors.white)), backgroundColor: kDanger),
+    );
+  }
+
   Future<void> _checkForUpdates() async {
-    final uri = Uri.parse('https://github.com/toptestsoft/vyre-mobile/releases');
+    final release = await UpdateService.checkForUpdates();
+    if (release == null) {
+      if (!mounted) return;
+      _showError('Не удалось проверить обновления');
+      return;
+    }
+
+    final latestTag = release['tag_name'] as String? ?? '';
+    final currentVersion = '1.1.0';
+
+    if (latestTag.replaceFirst('v', '') == currentVersion) {
+      if (!mounted) return;
+      _showError('Обновление не нужно — у вас последняя версия');
+      return;
+    }
+
+    final uri = Uri.parse('https://github.com/toptestsoft/vyre-mobile/releases/latest');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else if (mounted) {
-      setState(() => _error = 'Не удалось открыть страницу обновлений');
+    } else {
+      if (!mounted) return;
+      _showError('Не удалось открыть страницу обновлений');
     }
   }
 
@@ -344,17 +367,49 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         backgroundColor: const Color(0xFF0a0a1a),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('VYRE', style: TextStyle(color: Colors.white)),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Версия: 1.0.0', style: TextStyle(color: kTextSecondary)),
-            SizedBox(height: 8),
-            Text('Группа в Telegram: @$kTelegramChannel', style: TextStyle(color: kTextSecondary)),
+            Text('Версия: 1.1.0+2', style: TextStyle(color: kTextSecondary)),
             SizedBox(height: 8),
             Text('Лицензия: MIT', style: TextStyle(color: kTextSecondary)),
-            SizedBox(height: 4),
-            Text('Исходный код: github.com/toptestsoft', style: TextStyle(color: kTextMuted)),
+            Text.rich(
+              TextSpan(
+                text: 'Группа в Telegram: ',
+                style: TextStyle(color: kTextSecondary),
+                children: [
+                  TextSpan(
+                    text: '@kTelegramChannel',
+                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
+                  ),
+                ],
+              ),
+            ),
+            Text.rich(
+              TextSpan(
+                text: 'Исходный код: ',
+                style: TextStyle(color: kTextSecondary),
+                children: [
+                  TextSpan(
+                    text: kGithubUrl,
+                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
+                  ),
+                ],
+              ),
+            ),
+            Text.rich(
+              TextSpan(
+                text: 'Политика конфиденциальности: ',
+                style: TextStyle(color: kTextSecondary),
+                children: [
+                  TextSpan(
+                    text: 'github.com/toptestsoft/vyre-mobile',
+                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
         actions: [
@@ -636,7 +691,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           GlassIconButton(icon: Icons.apps, onTap: _openAppSelection),
           GlassIconButton(
             icon: Icons.telegram,
-            onTap: _openTelegram,
+            onTap: _openTelegramChannel,
             tooltip: 'Подписка в Telegram',
           ),
           GlassIconButton(
