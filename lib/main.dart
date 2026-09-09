@@ -351,19 +351,19 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
     final version = updateInfo['version'] as String;
     final releaseNotes = updateInfo['releaseNotes'] as String;
-    final downloadUrl = updateInfo['downloadUrl'] as String?;
+    final releaseUrl = updateInfo['releaseUrl'] as String;
 
     _showUpdateDialog(
       version: version,
       releaseNotes: releaseNotes,
-      downloadUrl: downloadUrl,
+      releaseUrl: releaseUrl,
     );
   }
 
   void _showUpdateDialog({
     required String version,
     required String releaseNotes,
-    required String? downloadUrl,
+    required String releaseUrl,
   }) {
     showDialog(
       context: context,
@@ -396,28 +396,21 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             child: const Text('Позже', style: TextStyle(color: kTextSecondary)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              _downloadAndInstallUpdate(downloadUrl);
+              final uri = Uri.parse(releaseUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                if (!mounted) return;
+                _showError('Не удалось открыть страницу обновления');
+              }
             },
             child: const Text('Обновить', style: TextStyle(color: Colors.greenAccent)),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _downloadAndInstallUpdate(String? downloadUrl) async {
-    if (downloadUrl == null || downloadUrl.isEmpty) {
-      _showError('Ссылка для скачивания не найдена');
-      return;
-    }
-    final uri = Uri.parse(downloadUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      _showError('Не удалось открыть страницу загрузки');
-    }
   }
 
   void _showAboutApp() {
