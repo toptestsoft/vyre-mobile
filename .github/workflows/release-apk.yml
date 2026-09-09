@@ -36,7 +36,7 @@ jobs:
           echo "Keystore created"
 
       - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi
+      - run: flutter build apk --release
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -55,7 +55,7 @@ jobs:
           generate_release_notes: true
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
-            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/flutter-apk/app-release.apk
             screenshots/home.png
             screenshots/icon.png
             screenshots/servers.png
