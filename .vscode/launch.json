@@ -1,0 +1,65 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "veil_test",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "veil_test (profile mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "veil_test (release mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        },
+        {
+            "name": ".widget_preview",
+            "cwd": ".widget_preview",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": ".widget_preview (profile mode)",
+            "cwd": ".widget_preview",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": ".widget_preview (release mode)",
+            "cwd": ".widget_preview",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        },
+        {
+            "name": "lib",
+            "cwd": "lib",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "lib (profile mode)",
+            "cwd": "lib",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "lib (release mode)",
+            "cwd": "lib",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        }
+    ]
+}

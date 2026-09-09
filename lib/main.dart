@@ -335,28 +335,88 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   }
 
   Future<void> _checkForUpdates() async {
-    final release = await UpdateService.checkForUpdates();
-    if (release == null) {
+    final updateInfo = await UpdateService.checkForUpdates();
+
+    if (updateInfo['error'] != null) {
       if (!mounted) return;
-      _showError('Не удалось проверить обновления');
+      _showError(updateInfo['error'] as String);
       return;
     }
 
-    final latestTag = release['tag_name'] as String? ?? '';
-    final currentVersion = '1.1.0';
-
-    if (latestTag.replaceFirst('v', '') == currentVersion) {
+    if (!updateInfo['hasUpdate']) {
       if (!mounted) return;
-      _showError('Обновление не нужно — у вас последняя версия');
+      _showError('У вас последняя версия');
       return;
     }
 
-    final uri = Uri.parse('https://github.com/toptestsoft/vyre-mobile/releases/latest');
+    final version = updateInfo['version'] as String;
+    final releaseNotes = updateInfo['releaseNotes'] as String;
+    final downloadUrl = updateInfo['downloadUrl'] as String?;
+
+    _showUpdateDialog(
+      version: version,
+      releaseNotes: releaseNotes,
+      downloadUrl: downloadUrl,
+    );
+  }
+
+  void _showUpdateDialog({
+    required String version,
+    required String releaseNotes,
+    required String? downloadUrl,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF0a0a1a),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Доступно обновление', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Новая версия: $version', style: TextStyle(color: Colors.white)),
+            SizedBox(height: 8),
+            if (releaseNotes.isNotEmpty) ...[
+              Text('Что нового:', style: TextStyle(color: kTextSecondary, fontWeight: FontWeight.bold)),
+              SizedBox(height: 4),
+              Text(
+                releaseNotes,
+                style: TextStyle(color: kTextMuted, fontSize: 14),
+                maxLines: 10,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Позже', style: TextStyle(color: kTextSecondary)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _downloadAndInstallUpdate(downloadUrl);
+            },
+            child: const Text('Обновить', style: TextStyle(color: Colors.greenAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadAndInstallUpdate(String? downloadUrl) async {
+    if (downloadUrl == null || downloadUrl.isEmpty) {
+      _showError('Ссылка для скачивания не найдена');
+      return;
+    }
+    final uri = Uri.parse(downloadUrl);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
-      if (!mounted) return;
-      _showError('Не удалось открыть страницу обновлений');
+      _showError('Не удалось открыть страницу загрузки');
     }
   }
 
