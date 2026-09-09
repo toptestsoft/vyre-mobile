@@ -48,3 +48,5 @@ app.*.map.json
 .widget_preview/
 android/app/keystore.*
 lib/android/
+android/app/keystore.jks
+android/app/keystore.*
