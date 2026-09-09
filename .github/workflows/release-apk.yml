@@ -38,7 +38,7 @@ jobs:
       - run: flutter pub get
       - run: flutter build apk --release --split-per-abi
         env:
-          KEYSTORE_PATH: android/app/keystore.jks
+          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
           KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
