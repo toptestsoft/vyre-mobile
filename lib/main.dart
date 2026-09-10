@@ -15,6 +15,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // ─── Импорты вынесенных модулей ───────────────────────────
 import 'models/subscription.dart';          // ServerRow, SubscriptionItem
