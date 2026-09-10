@@ -14,6 +14,7 @@ import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 // ─── Импорты вынесенных модулей ───────────────────────────
 import 'models/subscription.dart';          // ServerRow, SubscriptionItem
@@ -413,71 +414,258 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
-  void _showAboutApp() {
+  void _showAboutApp() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final version = '${packageInfo.version}+${packageInfo.buildNumber}';
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF0a0a1a),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('VYRE', style: TextStyle(color: Colors.white)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        title: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [kAccentPurple, kAccentCyan],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: kAccentPurple.withValues(alpha: 0.5),
+                    blurRadius: 16,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: const Center(
+                child: Text(
+                  'V',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 24,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'VYRE VPN',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  'Cyber-Glass Edition',
+                  style: TextStyle(color: kTextMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Версия: 1.1.0+2', style: TextStyle(color: kTextSecondary)),
-            SizedBox(height: 8),
-            Text('Лицензия: MIT', style: TextStyle(color: kTextSecondary)),
-            Text.rich(
-              TextSpan(
-                text: 'Группа в Telegram: ',
-                style: TextStyle(color: kTextSecondary),
-                children: [
-                  TextSpan(
-                    text: '@kTelegramChannel',
-                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
-                  ),
-                ],
-              ),
+            // Версия
+            _buildInfoRow(
+              icon: Icons.tag,
+              iconColor: kAccentCyan,
+              title: 'Версия',
+              value: version,
             ),
-            Text.rich(
-              TextSpan(
-                text: 'Исходный код: ',
-                style: TextStyle(color: kTextSecondary),
-                children: [
-                  TextSpan(
-                    text: kGithubUrl,
-                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 8),
+            // Лицензия
+            _buildInfoRow(
+              icon: Icons.gavel,
+              iconColor: kAccentPurple,
+              title: 'Лицензия',
+              value: 'MIT',
             ),
-            Text.rich(
-              TextSpan(
-                text: 'Политика конфиденциальности: ',
-                style: TextStyle(color: kTextSecondary),
-                children: [
-                  TextSpan(
-                    text: 'github.com/toptestsoft/vyre-mobile',
-                    style: TextStyle(color: kTextMuted, decoration: TextDecoration.underline),
-                  ),
-                ],
-              ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(color: kGlassBorder, height: 1),
+            ),
+            // Telegram
+            _buildLinkRow(
+              icon: Icons.telegram,
+              iconColor: kAccentCyan,
+              title: 'Telegram-канал',
+              value: '@$kTelegramChannel',
+              onTap: _openTelegramChannel,
+            ),
+            const SizedBox(height: 8),
+            // GitHub
+            _buildLinkRow(
+              icon: Icons.code,
+              iconColor: kAccentPurple,
+              title: 'Исходный код',
+              value: 'toptestsoft/vyre-mobile',
+              onTap: () async { final uri = Uri.parse(kGithubUrl); if (await canLaunchUrl(uri)) { await launchUrl(uri, mode: LaunchMode.externalApplication); } },
+            ),
+            const SizedBox(height: 8),
+            // Privacy
+            _buildLinkRow(
+              icon: Icons.privacy_tip_outlined,
+              iconColor: kAccentMagenta,
+              title: 'Политика конфиденциальности',
+              value: 'github.com/toptestsoft/vyre-mobile',
+              onTap: () async { final uri = Uri.parse(kGithubUrl); if (await canLaunchUrl(uri)) { await launchUrl(uri, mode: LaunchMode.externalApplication); } },
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(ctx),
             child: const Text('ОК', style: TextStyle(color: kAccentCyan)),
           ),
-          TextButton(
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: kAccentPurple.withValues(alpha: 0.2),
+              foregroundColor: kAccentPurple,
+            ),
             onPressed: () {
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               _checkForUpdates();
             },
-            child: const Text('Проверить обновления', style: TextStyle(color: kAccentPurple)),
+            icon: const Icon(Icons.system_update, size: 18),
+            label: const Text('Проверить обновления'),
           ),
         ],
+      ),
+    );
+  }
+
+  // Строка информации (без нажатия)
+  Widget _buildInfoRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: kGlass,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kGlassBorder),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: iconColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(color: kTextSecondary, fontSize: 12),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: kTextPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Строка-ссылка (с нажатием)
+  Widget _buildLinkRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: kGlass,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kGlassBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: iconColor.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                  ),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: kTextPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.open_in_new,
+              size: 16,
+              color: kTextMuted,
+            ),
+          ],
+        ),
       ),
     );
   }

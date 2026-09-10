@@ -16,11 +16,11 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/keystore.jks"
+            val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/app/keystore.jks"
             storeFile = file(keystorePath)
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
-            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: ""
-            keyPassword = System.getenv("KEYSTORE_KEY_PASSWORD") ?: ""
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "toptestsoft2026"
+            keyAlias = System.getenv("KEYSTORE_ALIAS") ?: "toptestsoft"
+            keyPassword = System.getenv("KEYSTORE_KEY_PASSWORD") ?: "toptestsoft2026"
         }
     }
 
@@ -42,6 +42,9 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 

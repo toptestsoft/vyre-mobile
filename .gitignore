@@ -50,3 +50,4 @@ android/app/keystore.*
 lib/android/
 android/app/keystore.jks
 android/app/keystore.*
+veil_test.iml

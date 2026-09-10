@@ -7,4 +7,4 @@ VYRE VPN does not collect, store or transmit any personal data or logs.
 - **No third-party analytics**: No tracking, no ads, no data sharing with third parties.
 - **Open-source**: Full source code available at [github.com/toptestsoft/vyre-mobile](https://github.com/toptestsoft/vyre-mobile).
 
-For questions: contact via [@VYREPayBot](https://t.me/VYREPayBot).
+For questions: contact via toptestsoft@gmail.com
