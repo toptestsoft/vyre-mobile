@@ -59,4 +59,5 @@
 -keep class com.google.android.play.core.tasks.OnSuccessListener { *; }
 -keep class com.google.android.play.core.tasks.OnFailureListener { *; }
 -keep class com.google.android.play.core.splitcompat.SplitCompatApplication { *; }
+-dontwarn com.google.android.play.core.**
 
