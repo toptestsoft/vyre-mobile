@@ -25,23 +25,19 @@ jobs:
           channel: 'stable'
 
       - name: Setup keystore
-        env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
         run: |
           mkdir -p android/app
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/keystore.jks
-          echo "Keystore created"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/keystore.jks
+          cat > android/key.properties << 'EOF'
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEYSTORE_ALIAS }}
+          storeFile=keystore.jks
+          EOF
+          echo "Keystore and key.properties created"
 
       - run: flutter pub get
       - run: flutter build apk --release
-        env:
-          KEYSTORE_PATH: ${{ github.workspace }}/android/app/keystore.jks
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
-          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
 
       - uses: actions/upload-artifact@v4
         with:
