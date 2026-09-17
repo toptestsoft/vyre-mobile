@@ -55,10 +55,9 @@
 ## 📦 Установка
 
 ### Скачать APK
-Перейдите в [Releases](https://github.com/toptestsoft/vyre-mobile/releases/latest) и скачайте APK для вашей архитектуры:
-- `app-arm64-v8a-release.apk` — для большинства современных устройств
-- `app-armeabi-v7a-release.apk` — для старых 32-битных устройств
-- `app-x86_64-release.apk` — для эмуляторов и x86-устройств
+Перейдите в [Releases](https://github.com/toptestsoft/vyre-mobile/releases/latest) и скачайте универсальный APK:
+- `app-release.apk` — подходит для всех архитектур (arm64, armeabi-v7a, x86_64)
+- `VYRE-1.1.1+3-universal.apk` — именованная сборка для текущего релиза
 
 > **Требования:** Android 7.0+ (API 24)
 
@@ -68,4 +67,6 @@
 git clone https://github.com/toptestsoft/vyre-mobile.git
 cd vyre-mobile
 flutter pub get
-flutter build apk --release --split-per-abi
+flutter build apk --release
+
+Собранный файл будет в `build/app/outputs/flutter-apk/app-release.apk` (универсальный, все архитектуры).
