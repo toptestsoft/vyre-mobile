@@ -5,8 +5,9 @@ import '../models/subscription.dart';
 
 class ServersSheet extends StatelessWidget {
   final List<ServerRow> servers;
+  final ServerRow? bestServer;
 
-  const ServersSheet({super.key, required this.servers});
+  const ServersSheet({super.key, required this.servers, this.bestServer});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +54,9 @@ class ServersSheet extends StatelessWidget {
                       itemCount: servers.length,
                       itemBuilder: (ctx, i) {
                         final s = servers[i];
-                        final isBest = (i == 0 && s.delayMs >= 0);
+                        final isBest = bestServer != null &&
+                            s.config == bestServer!.config &&
+                            s.delayMs >= 0;
                         return Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(16),

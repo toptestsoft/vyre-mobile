@@ -50,7 +50,6 @@
 - [ ] iOS
 - [ ] Локализация (EN, RU, ZH)
 - [ ] Sentry crash reporting
-- [ ] Split-tunneling (per-app routing)
 - [ ] Widget для быстрого подключения
 
 ## 📦 Установка
@@ -61,7 +60,7 @@
 - `app-armeabi-v7a-release.apk` — для старых 32-битных устройств
 - `app-x86_64-release.apk` — для эмуляторов и x86-устройств
 
-> **Требования:** Android 6.0+ (API 23)
+> **Требования:** Android 7.0+ (API 24)
 
 ### Сборка из исходников
 

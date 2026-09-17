@@ -95,6 +95,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   // ─── Состояние VPN ──────────────────────────────────────────
   List<ServerRow> _servers = [];
+  ServerRow? _bestServer;
   String _error = '';
   VpnState _vpnState = VpnState.initializing;
   bool get _connected => _vpnState.isConnected;
@@ -755,6 +756,23 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       final ServerRow best = valid.isNotEmpty
           ? valid.first
           : rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
+      _bestServer = best;
+
+      // ─── Split-tunneling: guard от пустого списка приложений ──────
+      if (valid.isEmpty) {
+        if (!mounted) return;
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Серверы недоступны'),
+            content: const Text('Все серверы не ответили на ping. Проверьте подключение к интернету и попробуйте снова.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
+            ],
+          ),
+        );
+        return;
+      }
 
       // ─── Split-tunneling: guard от пустого списка приложений ──────
       List<String>? blockedAppsList;
@@ -857,7 +875,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => ServersSheet(servers: _servers),
+      builder: (ctx) => ServersSheet(servers: _servers, bestServer: _bestServer),
     );
   }
 
