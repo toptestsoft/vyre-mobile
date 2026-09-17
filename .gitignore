@@ -54,3 +54,5 @@ veil_test.iml
 *.bak
 android/app/keystore.jks
 android/key.properties
+lib/build/
+build/
