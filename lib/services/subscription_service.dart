@@ -1,16 +1,11 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'package:http/http.dart' as http;
 import '../models/vpn_state.dart';
 import '../utils/helpers.dart'; // SubscriptionDecoder
 import 'subscription_cache.dart';
-
-class SubscriptionException implements Exception {
-  final String message;
-  SubscriptionException(this.message);
-  @override
-  String toString() => message;
-}
+import 'subscription_exceptions.dart';
 
 class SubscriptionService {
   SubscriptionService(this._cache);
@@ -41,35 +36,61 @@ class SubscriptionService {
     throw SubscriptionException('Не удалось загрузить подписку: $last');
   }
 
-  Future<String> _fetchOnce(String url) async {
-    final response = await http.Client()
-        .send(http.Request('GET', Uri.parse(url))
-          ..followRedirects = false
-          ..headers['User-Agent'] = 'VYRE/2.0')
-        .then((r) => http.Response.fromStream(r))
-        .timeout(const Duration(seconds: 15));
+  Future<String> _fetchOnce(String url, {int redirectCount = 0}) async {
+    if (redirectCount > 5) {
+      throw const SubscriptionRedirectException('Превышен лимит редиректов (максимум 5)');
+    }
 
-    if (response.isRedirect) {
-      final loc = response.headers['location'];
-      final target = loc == null ? null : Uri.parse(url).resolve(loc);
-      if (target == null || !(target.scheme == 'https' || target.scheme == 'http')) {
-        throw SubscriptionException('Подписка редиректит на небезопасный адрес');
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url))
+        ..followRedirects = false
+        ..headers['User-Agent'] = 'VYRE/2.0';
+
+      final streamedResponse = await client.send(request).timeout(const Duration(seconds: 15));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.isRedirect) {
+        final loc = response.headers['location'];
+        final target = loc == null ? null : Uri.parse(url).resolve(loc);
+
+        if (target == null || !(target.scheme == 'https' || target.scheme == 'http')) {
+          throw const SubscriptionRedirectException('Подписка редиректит на небезопасный адрес');
+        }
+
+        final currentScheme = Uri.parse(url).scheme;
+        if (currentScheme == 'https' && target.scheme == 'http') {
+          throw const SubscriptionRedirectException('Запрещён редирект с HTTPS на HTTP');
+        }
+
+        return await _fetchOnce(target.toString(), redirectCount: redirectCount + 1);
       }
-      return _fetchOnce(target.toString());
-    }
 
-    final ct = response.headers['content-type'] ?? '';
-    if (ct.contains('text/html')) {
-      throw SubscriptionException('Сервер вернул HTML вместо подписки (капча/блок?)');
-    }
+      final ct = response.headers['content-type'] ?? '';
+      if (ct.contains('text/html')) {
+        throw const SubscriptionException('Сервер вернул HTML вместо подписки (капча/блок?)');
+      }
 
-    if (response.statusCode != 200) {
-      throw SubscriptionException('Ошибка загрузки подписки: ${response.statusCode}');
+      if (response.statusCode != 200) {
+        throw SubscriptionException('Ошибка загрузки подписки: ${response.statusCode}');
+      }
+
+      if (response.bodyBytes.length > 5 * 1024 * 1024) {
+        throw const SubscriptionSizeLimitException('Ответ слишком большой (лимит 5 МБ)');
+      }
+
+      return response.body;
+    } on SubscriptionException {
+      rethrow;
+    } on TimeoutException {
+      throw const SubscriptionTimeoutException('Таймаут при загрузке подписки');
+    } on http.ClientException {
+      throw const SubscriptionException('Ошибка сети при загрузке подписки');
+    } catch (e) {
+      throw SubscriptionException('Не удалось загрузить подписку: $e');
+    } finally {
+      client.close();
     }
-    if (response.bodyBytes.length > 5 * 1024 * 1024) {
-      throw SubscriptionException('Ответ слишком большой');
-    }
-    return response.body;
   }
 
   /// Декодирование + построчный парсинг с подсчётом брака.

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/services.dart';
@@ -7,8 +8,11 @@ import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'services/vpn_service.dart';
 import 'services/subscription_repository.dart';
 import 'services/subscription_service.dart';
+import 'services/server_selector.dart';
 import 'services/subscription_cache.dart';
 import 'services/update_service.dart';
+import 'services/config_validator.dart';
+import 'services/config_normalizer.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -339,33 +343,29 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   Future<void> _checkForUpdates() async {
     final updateInfo = await UpdateService.checkForUpdates();
 
-    if (updateInfo['error'] != null) {
+    if (updateInfo.error != null) {
       if (!mounted) return;
-      _showError(updateInfo['error'] as String);
+      _showError(updateInfo.error!);
       return;
     }
 
-    if (!updateInfo['hasUpdate']) {
+    if (!updateInfo.hasUpdate) {
       if (!mounted) return;
       _showError('У вас последняя версия');
       return;
     }
 
-    final version = updateInfo['version'] as String;
-    final releaseNotes = updateInfo['releaseNotes'] as String;
-    final releaseUrl = updateInfo['releaseUrl'] as String;
-
     _showUpdateDialog(
-      version: version,
-      releaseNotes: releaseNotes,
-      releaseUrl: releaseUrl,
+      version: updateInfo.version,
+      releaseNotes: updateInfo.releaseNotes,
+      downloadUrl: updateInfo.downloadUrl ?? '',
     );
   }
 
   void _showUpdateDialog({
     required String version,
     required String releaseNotes,
-    required String releaseUrl,
+    required String downloadUrl,
   }) {
     showDialog(
       context: context,
@@ -400,7 +400,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              final uri = Uri.parse(releaseUrl);
+              final uri = Uri.parse(downloadUrl);
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               } else {
@@ -719,15 +719,53 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         throw SubException('Подписка не содержит серверов');
       }
 
+      // ─── Валидация конфигов перед пингом ────
+      final validator = ConfigValidator();
+      final List<V2RayURL> validParsed = [];
+      int invalidCount = 0;
+
+      for (final p in parsed) {
+        try {
+          final cfg = p.getFullConfiguration();
+          validator.validate(jsonDecode(cfg));
+          validParsed.add(p);
+        } on ConfigValidationException {
+          invalidCount++;
+        } catch (_) {
+          invalidCount++;
+        }
+      }
+
+      if (validParsed.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _error = 'Все серверы в подписке невалидны';
+          _vpnState = VpnState.error;
+        });
+        _syncPulse();
+        return;
+      }
+
+      if (invalidCount > 0) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Отфильтровано невалидных серверов: $invalidCount'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
       // ─── Тестируем серверы, не более 5 одновременно ────
       final List<ServerRow> rows = [];
       final List<Future<void>> futures = [];
       final semaphore = Semaphore(5);
 
-      for (final p in parsed) {
+      for (final p in validParsed) {
         futures.add(
           semaphore.withPermit(() async {
-            final cfg = p.getFullConfiguration();
+            final rawCfg = p.getFullConfiguration();
+            final cfg = ConfigNormalizer().normalize(rawCfg);
             int ms = -1;
             try {
               ms = await _vpn.pingServer(cfg);
@@ -740,10 +778,8 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       await Future.wait(futures);
 
       // ─── Сортировка: сначала успешные, потом остальные ────
-      final valid = rows.where((r) => r.delayMs >= 0).toList()
-        ..sort((a, b) => a.delayMs.compareTo(b.delayMs));
-      final invalid = rows.where((r) => r.delayMs < 0).toList();
-      final sortedRows = [...valid, ...invalid];
+      final selector = ServerSelector();
+      final sortedRows = selector.sort(rows);
 
       if (!mounted) return;
       setState(() {
@@ -753,13 +789,12 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       _syncPulse();
 
       // ─── Выбираем лучший сервер ──────
-      final ServerRow best = valid.isNotEmpty
-          ? valid.first
-          : rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
+      final ServerRow? bestCandidate = selector.selectBest(sortedRows);
+      final ServerRow best = bestCandidate ?? rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
       _bestServer = best;
 
       // ─── Split-tunneling: guard от пустого списка приложений ──────
-      if (valid.isEmpty) {
+      if (bestCandidate == null) {
         if (!mounted) return;
         await showDialog(
           context: context,
@@ -806,8 +841,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         _vpnState = VpnState.error;
       });
       _syncPulse();
-    } finally {
-      if (mounted) setState(() { _vpnState = VpnState.disconnected; });
     }
   }
 
