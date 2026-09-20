@@ -20,12 +20,13 @@
 
 - ⚡ **Мгновенное подключение** — автоматический выбор лучшего сервера по пингу в один тап.
 - 🌍 **Мультилокация** — поддержка VLESS, VMess, Trojan, SS, Hysteria с отображением задержки.
-- 🔐 **Безопасное хранение** — ключи и подписки зашифрованы через Android Keystore / iOS Keychain (`flutter_secure_storage`).
-- 🔄 **Автообновление** — умная проверка обновлений через GitHub Releases API.
+- 🔐 **Безопасное хранение** — ключи и подписки зашифрованы через Android Keystore / iOS Keychain (`flutter_secure_storage`), кэш защищён AES-GCM.
+- 🔄 **Автообновление** — умная проверка обновлений через GitHub Releases API с типизированным DTO.
 - 🛡️ **Zero-Log Policy** — приложение не собирает, не хранит и не передаёт никакие пользовательские данные.
 - 💳 **Гибкая оплата** — интеграция с Telegram Stars и USDT (CryptoBot) через бота `VYREPayBot`.
 - 📴 **Offline-first** — кэширование конфигураций для подключения без интернета.
 - 🔀 **Split-tunneling** — выборочный роутинг трафика по приложениям.
+- ✅ **Защита от утечек** — валидация конфигов, нормализация DNS/IPv6/WebRTC, защита от HTTPS-downgrade и редиректов.
 
 ## 🏗️ Архитектура
 
@@ -35,12 +36,12 @@
 |---|---|---|
 | **UI** | Screens, Widgets | Cyber-glass дизайн на Material 3 |
 | **State** | VpnState enum | Невозможные состояния непредставимы |
-| **Services** | VpnService, SubscriptionService, UpdateService | Бизнес-логика изолирована от UI |
-| **Data** | SubscriptionRepository, SubscriptionCache | Secure Storage + offline-кэш |
+| **Services** | VpnService, SubscriptionService, UpdateService, ConfigValidator, ConfigNormalizer | Бизнес-логика, валидация и нормализация конфигов |
+| **Data** | SubscriptionRepository, SubscriptionCache | Secure Storage + offline-кэш с шифрованием |
 | **Engine** | flutter_v2ray | Xray/V2Ray core с поддержкой Reality |
 
 ### Тестирование и CI/CD
-- ✅ Unit-тесты: ServerSelector, SubscriptionDecoder
+- ✅ Unit-тесты: ServerSelector, SubscriptionDecoder, ConfigValidator, ConfigNormalizer
 - ✅ GitHub Actions: автоматический analyze + test при каждом push
 - ✅ Auto-build: APK собираются автоматически при создании тега
 

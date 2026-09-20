@@ -12,6 +12,8 @@ class ConfigValidator {
     'shadowsocks',
     'vmess',
     'wireguard',
+    'freedom',
+    'blackhole',
   };
 
   bool _isPrivateOrLocal(String address) {
