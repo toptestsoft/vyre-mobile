@@ -1,3 +1,5 @@
+import 'dart:io';
+
 class ConfigValidationException implements Exception {
   final String message;
   ConfigValidationException(this.message);
@@ -15,34 +17,38 @@ class ConfigValidator {
   };
 
   bool _isPrivateOrLocal(String address) {
-    // IPv4 checks
-    if (address == '127.0.0.1') return true;
-    if (address.startsWith('10.')) return true;
-    if (address.startsWith('192.168.')) return true;
+    final lower = address.toLowerCase();
+    if (lower == 'localhost') return true;
 
-    // 172.16.0.0 - 172.31.255.255
-    if (address.startsWith('172.')) {
+    final addr = InternetAddress.tryParse(address);
+    if (addr == null) return false;
+
+    if (addr.isLoopback || addr.isMulticast || addr.isLinkLocal) return true;
+    if (address == '0.0.0.0' || address == '::' || address == '255.255.255.255') return true;
+
+    // 127.0.0.0/8
+    if (addr.type == InternetAddressType.IPv4 && address.startsWith('127.')) return true;
+
+    if (addr.type == InternetAddressType.IPv4) {
       final parts = address.split('.');
-      if (parts.length >= 2) {
-        final second = int.tryParse(parts[1]);
-        if (second != null && second >= 16 && second <= 31) {
-          return true;
+      if (parts.length == 4) {
+        final octets = parts.map(int.tryParse).whereType<int>().toList();
+        if (octets.length == 4) {
+          if (octets[0] == 10) return true;
+          if (octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31) return true;
+          if (octets[0] == 192 && octets[1] == 168) return true;
         }
       }
     }
 
-    if (address.startsWith('169.254.')) return true; // Link-local
+    if (addr.type == InternetAddressType.IPv6) {
+      final lower = address.toLowerCase();
+      if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7
 
-    // IPv6 checks
-    final lower = address.toLowerCase();
-    if (lower == '::1' || lower == 'localhost') return true;
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // fc00::/7
-    if (lower.startsWith('fe80')) return true; // fe80::/10 link-local
-
-    // IPv4-mapped IPv6: ::ffff:192.168.1.1
-    if (lower.startsWith('::ffff:')) {
-      final ipv4Part = address.substring(7); // Убираем '::ffff:'
-      return _isPrivateOrLocal(ipv4Part);
+      if (lower.startsWith('::ffff:')) {
+        final ipv4Part = address.substring(7);
+        return _isPrivateOrLocal(ipv4Part);
+      }
     }
 
     return false;
@@ -59,10 +65,28 @@ class ConfigValidator {
         throw ConfigValidationException('Unsupported protocol: $protocol');
       }
 
-      final server = out['settings']?['vnext']?.first?['address'] as String?
-              ?? out['settings']?['servers']?.first?['address'] as String?;
-      if (server != null && _isPrivateOrLocal(server)) {
-        throw ConfigValidationException('Connection to private address is forbidden');
+      final vnext = out['settings']?['vnext'] as List?;
+      final servers = out['settings']?['servers'] as List?;
+      final addresses = <String>[];
+
+      if (vnext != null) {
+        for (final item in vnext) {
+          final addr = item?['address'] as String?;
+          if (addr != null) addresses.add(addr);
+        }
+      }
+
+      if (servers != null) {
+        for (final item in servers) {
+          final addr = item?['address'] as String?;
+          if (addr != null) addresses.add(addr);
+        }
+      }
+
+      for (final address in addresses) {
+        if (_isPrivateOrLocal(address)) {
+          throw ConfigValidationException('Connection to private address is forbidden: $address');
+        }
       }
     }
   }
