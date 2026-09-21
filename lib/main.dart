@@ -125,6 +125,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   bool _isInitialized = false;
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
   bool _alwaysOnVpnDialogShown = false;
+  bool _cancelRequested = false;
 
   List<AppInfo> _allApps = [];
   Set<String> _vpnRoutedPackages = {}; // приложения, которые пускаем через VPN
@@ -737,6 +738,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
     try {
       setState(() { _vpnState = VpnState.testing; });
+      _cancelRequested = false;
       _syncPulse();
 
       final bool isSingle = SubscriptionService.isSingleLink(subUrl);
@@ -799,6 +801,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       for (final p in validParsed) {
         futures.add(
           semaphore.withPermit(() async {
+            if (_cancelRequested) return;
             final rawCfg = p.getFullConfiguration();
             try {
               final cfg = ConfigNormalizer().normalize(rawCfg);
@@ -814,7 +817,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         );
       }
 
-      await Future.wait(futures);
+      try {
+        await Future.wait(futures).timeout(const Duration(seconds: 30));
+      } on TimeoutException {
+        // продолжаем с тем, что успело собраться в rows
+      }
 
       // ─── Сортировка: сначала успешные, потом остальные ────
       final selector = ServerSelector();
@@ -900,6 +907,15 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() => _error = getUserFriendlyError(e));
     }
+  }
+
+  Future<void> _cancelTesting() async {
+    setState(() {
+      _cancelRequested = true;
+      _vpnState = VpnState.disconnected;
+      _error = 'Тестирование отменено';
+    });
+    _syncPulse();
   }
 
   // ─── QR-сканер ─────────────────────────────────────────────
@@ -1089,10 +1105,14 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                           final scale = isPulsing ? _pulseAnim.value : 1.0;
                           return Semantics(
                             button: true,
-                            label: _connected ? 'Отключиться от VPN' : 'Подключиться к VPN',
-                            enabled: _connected || canStart,
+                            label: _connected
+                                ? 'Отключиться от VPN'
+                                : (_testing || _isConnecting ? 'Отменить' : 'Подключиться к VPN'),
+                            enabled: _connected || canStart || _testing || _isConnecting,
                             child: GestureDetector(
-                              onTap: _connected ? _disconnect : (canStart ? _connect : null),
+                              onTap: _connected
+                                  ? _disconnect
+                                  : ((_testing || _isConnecting) ? _cancelTesting : (canStart ? _connect : null)),
                             child: SizedBox(
                               width: 220,
                               height: 220,
@@ -1144,13 +1164,15 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Icon(
-                                            _connected ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                                            _connected
+                                                ? Icons.stop_rounded
+                                                : ((_testing || _isConnecting) ? Icons.close_rounded : Icons.play_arrow_rounded),
                                             size: 56,
-                                            color: _connected ? kDanger : kTextPrimary,
+                                            color: (_testing || _isConnecting) ? kDanger : (_connected ? kDanger : kTextPrimary),
                                           ),
                                           const SizedBox(height: 6),
                                           Text(
-                                            _connected ? 'СТОП' : 'СТАРТ',
+                                            _connected ? 'СТОП' : ((_testing || _isConnecting) ? 'ОТМЕНА' : 'СТАРТ'),
                                             style: const TextStyle(
                                               fontSize: 13,
                                               fontWeight: FontWeight.w800,
