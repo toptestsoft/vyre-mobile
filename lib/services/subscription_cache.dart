@@ -2,11 +2,24 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+abstract class SecureStorage {
+  Future<void> write({required String key, required String value});
+  Future<String?> read({required String key});
+  Future<void> delete({required String key});
+}
+
+class _FlutterSecureStorageAdapter extends FlutterSecureStorage implements SecureStorage {
+  _FlutterSecureStorageAdapter() : super();
+}
+
 /// Кэш последней УСПЕШНОЙ подписки в защищенном хранилище.
 /// Позволяет подключаться без сети (offline-first).
 class SubscriptionCache {
-  static final _secure = FlutterSecureStorage();
+  final SecureStorage _secure;
   static const _chunkSize = 12000;
+
+  SubscriptionCache({SecureStorage? secureStorage})
+      : _secure = secureStorage ?? _FlutterSecureStorageAdapter();
 
   Future<String> _keyFor(String subUrl) async {
     final bytes = utf8.encode(subUrl);
@@ -15,10 +28,14 @@ class SubscriptionCache {
   }
 
   Future<void> _cleanupOldChunks(String key) async {
-    await _secure.delete(key: '${key}_count');
-    for (var i = 0; i < 100; i++) {
-      await _secure.delete(key: '${key}_part_$i');
+    final countStr = await _secure.read(key: '${key}_count');
+    final oldCount = int.tryParse(countStr ?? '');
+    if (oldCount != null && oldCount > 0) {
+      for (var i = 0; i < oldCount; i++) {
+        await _secure.delete(key: '${key}_part_$i');
+      }
     }
+    await _secure.delete(key: '${key}_count');
     await _secure.delete(key: key);
   }
 
