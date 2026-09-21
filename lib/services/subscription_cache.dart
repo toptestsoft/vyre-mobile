@@ -14,22 +14,36 @@ class SubscriptionCache {
     return 'vyre_sub_${digest.toString()}';
   }
 
+  Future<void> _cleanupOldChunks(String key) async {
+    await _secure.delete(key: '${key}_count');
+    for (var i = 0; i < 100; i++) {
+      await _secure.delete(key: '${key}_part_$i');
+    }
+    await _secure.delete(key: key);
+  }
+
   Future<void> write(String subUrl, String body) async {
     try {
       final key = await _keyFor(subUrl);
-      if (body.length <= _chunkSize) {
-        await _secure.write(key: key, value: body);
-        await _secure.delete(key: '${key}_count');
+      final bodyBytes = utf8.encode(body);
+
+      if (bodyBytes.length <= _chunkSize) {
+        await _cleanupOldChunks(key);
+        await _secure.write(key: key, value: base64.encode(bodyBytes));
       } else {
-        final chunks = <String>[];
-        for (var i = 0; i < body.length; i += _chunkSize) {
-          final end = i + _chunkSize > body.length ? body.length : i + _chunkSize;
-          chunks.add(body.substring(i, end));
+        await _cleanupOldChunks(key);
+
+        final chunks = <List<int>>[];
+        for (var i = 0; i < bodyBytes.length; i += _chunkSize) {
+          final end = i + _chunkSize > bodyBytes.length ? bodyBytes.length : i + _chunkSize;
+          chunks.add(bodyBytes.sublist(i, end));
         }
-        await _secure.write(key: '${key}_count', value: chunks.length.toString());
+
         for (var i = 0; i < chunks.length; i++) {
-          await _secure.write(key: '${key}_part_$i', value: chunks[i]);
+          await _secure.write(key: '${key}_part_$i', value: base64.encode(chunks[i]));
         }
+
+        await _secure.write(key: '${key}_count', value: chunks.length.toString());
         await _secure.delete(key: key);
       }
     } catch (_) {
@@ -45,19 +59,26 @@ class SubscriptionCache {
       if (countStr != null) {
         final count = int.tryParse(countStr);
         if (count == null || count <= 0) return null;
-        final buffer = StringBuffer();
+
+        final allBytes = <int>[];
         for (var i = 0; i < count; i++) {
-          final chunk = await _secure.read(key: '${key}_part_$i');
-          if (chunk == null) return null;
-          buffer.write(chunk);
+          final chunkB64 = await _secure.read(key: '${key}_part_$i');
+          if (chunkB64 == null) return null;
+          allBytes.addAll(base64.decode(chunkB64));
         }
-        final body = buffer.toString();
+
+        final body = utf8.decode(allBytes);
         return body.isEmpty ? null : body;
       }
 
       final raw = await _secure.read(key: key);
       if (raw == null || raw.isEmpty) return null;
-      return raw;
+      try {
+        final bytes = base64.decode(raw);
+        return utf8.decode(bytes);
+      } on FormatException {
+        return raw;
+      }
     } catch (_) {
       return null;
     }
