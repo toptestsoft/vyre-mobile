@@ -55,7 +55,14 @@ void main() {
   test('rejects unsupported protocol', () {
     final config = {
       'outbounds': [
-        {'protocol': 'malicious', 'settings': {}}
+        {
+          'protocol': 'malicious',
+          'settings': {
+            'vnext': [
+              {'address': 'example.com', 'port': 443}
+            ]
+          }
+        }
       ]
     };
     expect(() => validator.validate(config), throwsA(isA<ConfigValidationException>()));
@@ -136,6 +143,56 @@ void main() {
             ]
           }
         }
+      ]
+    };
+    expect(() => validator.validate(config), returnsNormally);
+  });
+
+  test('rejects freedom protocol', () {
+    final config = {
+      'outbounds': [
+        {
+          'protocol': 'freedom',
+          'settings': {
+            'vnext': [
+              {'address': 'example.com', 'port': 443}
+            ]
+          }
+        }
+      ]
+    };
+    expect(() => validator.validate(config), throwsA(isA<ConfigValidationException>()));
+  });
+
+  test('rejects blackhole protocol', () {
+    final config = {
+      'outbounds': [
+        {
+          'protocol': 'blackhole',
+          'settings': {
+            'servers': [
+              {'address': 'example.com', 'port': 443}
+            ]
+          }
+        }
+      ]
+    };
+    expect(() => validator.validate(config), throwsA(isA<ConfigValidationException>()));
+  });
+
+  test('skips internal outbound without vnext/servers', () {
+    final config = {
+      'outbounds': [
+        {'protocol': 'freedom', 'settings': {}},
+        {'protocol': 'blackhole', 'settings': {}},
+        {
+          'protocol': 'vless',
+          'settings': {
+            'vnext': [
+              {'address': 'example.com', 'port': 443}
+            ]
+          }
+        },
       ]
     };
     expect(() => validator.validate(config), returnsNormally);

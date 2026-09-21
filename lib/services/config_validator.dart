@@ -12,8 +12,6 @@ class ConfigValidator {
     'shadowsocks',
     'vmess',
     'wireguard',
-    'freedom',
-    'blackhole',
   };
 
   bool _isPrivateOrLocal(String address) {
@@ -51,7 +49,9 @@ class ConfigValidator {
   }
 
   void validate(Map<String, dynamic> config) {
-    final outbounds = config['outbounds'] as List? ?? [];
+    final outbounds = (config['outbounds'] as List? ?? [])
+        .where((out) => out['settings']?['vnext'] != null || out['settings']?['servers'] != null)
+        .toList();
 
     for (final out in outbounds) {
       final protocol = out['protocol'] as String?;
