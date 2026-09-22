@@ -1046,8 +1046,24 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   // ─── Вставка из буфера ────────────────────────────────────
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    if (data?.text != null && mounted) {
-      setState(() => _subController.text = data!.text!);
+    if (!mounted) return;
+    if (data?.text != null && data!.text!.isNotEmpty) {
+      setState(() => _subController.text = data.text!);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Подписка добавлена в поле. Нажмите СТАРТ для подключения.'),
+          backgroundColor: kSuccess,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Буфер обмена пуст'),
+          backgroundColor: Colors.orange,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -1160,7 +1176,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                             button: true,
                             label: _connected
                                 ? 'Отключиться от VPN'
-                                : (_testing || _isConnecting ? 'Отменить' : 'Подключиться к VPN'),
+                                : (_testing || _isConnecting ? 'Отменить' : 'СТАРТ'),
                             enabled: _connected || canStart || _testing || _isConnecting,
                             child: GestureDetector(
                               onTap: _connected
@@ -1309,8 +1325,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                                 decoration: InputDecoration(
                                   filled: true,
                                   fillColor: Colors.white.withValues(alpha: 0.03),
-                                  hintText: 'https://... или vless://',
+                                  hintText: 'Вставьте URL подписки',
                                   hintStyle: const TextStyle(color: kTextMuted),
+                                  helperText: 'Затем нажмите СТАРТ для подключения',
+                                  helperMaxLines: 2,
+                                  helperStyle: const TextStyle(color: kTextMuted),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
                                     borderSide: BorderSide.none,
