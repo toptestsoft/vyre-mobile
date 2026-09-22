@@ -100,7 +100,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   // ─── Состояние VPN ──────────────────────────────────────────
   List<ServerRow> _servers = [];
-  ServerRow? _bestServer;
   String _error = '';
   VpnState _vpnState = VpnState.initializing;
   bool get _connected => _vpnState.isConnected;
@@ -896,7 +895,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       // ─── Выбираем лучший сервер ──────
       final ServerRow? bestCandidate = selector.selectBest(sortedRows);
       final ServerRow best = bestCandidate ?? rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
-      _bestServer = best;
 
       // ─── Split-tunneling: guard от пустого списка приложений ──────
       if (bestCandidate == null) {
