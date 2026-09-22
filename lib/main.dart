@@ -1093,7 +1093,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           ],
         ),
         actions: [
-          GlassIconButton(icon: Icons.qr_code_scanner, onTap: _openQrScanner),
           GlassIconButton(icon: Icons.settings, onTap: _showSettings),
           const SizedBox(width: 8),
         ],
