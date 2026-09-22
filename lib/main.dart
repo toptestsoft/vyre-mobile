@@ -929,6 +929,13 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         _subController.text = result;
         _error = '';
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Подписка добавлена'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -1768,6 +1775,8 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     super.dispose();
   }
 
+  DateTime? _lastFeedbackTime;
+
   void _onDetect(BarcodeCapture capture) {
     if (_handled) return;
     for (final barcode in capture.barcodes) {
@@ -1778,6 +1787,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         Navigator.pop(context, value);
         return;
       }
+    }
+
+    final now = DateTime.now();
+    if (_lastFeedbackTime == null || now.difference(_lastFeedbackTime!) > const Duration(seconds: 2)) {
+      _lastFeedbackTime = now;
+      HapticFeedback.lightImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Неподдерживаемый формат QR-кода'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
