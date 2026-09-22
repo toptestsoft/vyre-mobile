@@ -28,6 +28,7 @@ import 'models/vpn_state.dart';              // VpnState enum, ServerStatus, Par
 import 'utils/constants.dart';              // цвета, строки
 import 'utils/helpers.dart';                // getUserFriendlyError
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
+import 'widgets/connection_status_panel.dart'; // ConnectionStatusPanel
 
 // ═══════════════════════════════════════════════════════════
 //  VYRE VPN — 2026 CYBER-GLASS AESTHETIC (fixed build)
@@ -104,6 +105,28 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   bool get _connected => _vpnState.isConnected;
   bool get _testing => _vpnState == VpnState.testing;
   bool get _isConnecting => _vpnState.isBusy;
+  int? get _bestDelayMs {
+    if (_servers.isEmpty) return null;
+    final positive = _servers.where((s) => s.delayMs >= 0).toList();
+    if (positive.isEmpty) return null;
+    return positive.map((s) => s.delayMs).reduce((a, b) => a < b ? a : b);
+  }
+
+  String? _extractProtocol(String config) {
+    try {
+      final Map<String, dynamic> json = jsonDecode(config);
+      final outbounds = json['outbounds'] as List?;
+      if (outbounds != null && outbounds.isNotEmpty) {
+        final p = outbounds[0]['protocol'];
+        if (p is String) return p.toUpperCase();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  String _notice = '';
+  String? _connectedServer;
+  String? _connectedProtocol;
 
   final SubscriptionRepository _repo = SubscriptionRepository();
   late final SubscriptionService _subs = SubscriptionService(_subCache);
@@ -186,10 +209,16 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     try {
       await _vpn.initialize();
       if (!mounted) return;
-      setState(() => _isInitialized = true);
+      setState(() {
+        _isInitialized = true;
+        _vpnState = VpnState.disconnected;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = getUserFriendlyError(e));
+      setState(() {
+        _error = getUserFriendlyError(e);
+        _vpnState = VpnState.disconnected;
+      });
     }
   }
 
@@ -431,6 +460,9 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   Future<void> _showSettings() async {
     if (!mounted) return;
+    final androidVpn = AndroidVpnService();
+    final alwaysOn = await androidVpn.isAlwaysOnVpnEnabled();
+    if (!mounted) return;
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -468,9 +500,21 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             _SettingsTile(
               icon: Icons.security,
               title: 'Always-on VPN',
+              subtitle: alwaysOn ? 'Включено' : 'Выключено',
+              trailing: const Icon(Icons.chevron_right, color: kTextMuted, size: 20),
               onTap: () {
                 Navigator.pop(ctx);
                 _showAlwaysOnVpnDialog();
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.telegram,
+              title: 'Telegram-канал',
+              iconColor: kAccentCyan,
+              onTap: () {
+                Navigator.pop(ctx);
+                _openTelegramChannel();
               },
             ),
             const SizedBox(height: 8),
@@ -501,7 +545,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         backgroundColor: const Color(0xFF0a0a1a),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-        contentPadding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        contentPadding: const EdgeInsets.fromLTRB(12, kSpace4, 12, 12),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         title: Row(
           children: [
@@ -533,22 +577,28 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'VYRE VPN',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'VYRE VPN',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                Text(
-                  'Cyber-Glass Edition',
-                  style: TextStyle(color: kTextMuted, fontSize: 12),
-                ),
-              ],
+                  Text(
+                    'Cyber-Glass Edition',
+                    style: TextStyle(color: kTextMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: () => Navigator.pop(ctx),
+              icon: const Icon(Icons.close, color: kTextSecondary, size: 20),
             ),
           ],
         ),
@@ -558,11 +608,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             // Версия
             _buildInfoRow(
               icon: Icons.tag,
-              iconColor: kAccentCyan,
+              iconColor: kAccentPurple,
               title: 'Версия',
               value: version,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: kSpace2),
             // Лицензия
             _buildInfoRow(
               icon: Icons.gavel,
@@ -577,12 +627,12 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             // GitHub
             _buildLinkRow(
               icon: Icons.code,
-              iconColor: kAccentPurple,
+              iconColor: kAccentCyan,
               title: 'Исходный код',
               value: 'toptestsoft/vyre-mobile',
               onTap: () async { final uri = Uri.parse(kGithubUrl); if (await canLaunchUrl(uri)) { await launchUrl(uri, mode: LaunchMode.externalApplication); } },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: kSpace2),
             // Telegram
             _buildLinkRow(
               icon: Icons.telegram,
@@ -591,11 +641,11 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
               value: '@$kTelegramChannel',
               onTap: _openTelegramChannel,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: kSpace2),
             // Privacy
             _buildLinkRow(
               icon: Icons.privacy_tip_outlined,
-              iconColor: kAccentMagenta,
+              iconColor: kAccentCyan,
               title: 'Политика конфиденциальности',
               value: 'github.com/toptestsoft/vyre-mobile',
               onTap: () async { final uri = Uri.parse(kGithubUrl); if (await canLaunchUrl(uri)) { await launchUrl(uri, mode: LaunchMode.externalApplication); } },
@@ -603,14 +653,10 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('ОК', style: TextStyle(color: kAccentCyan)),
-          ),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: kAccentPurple.withValues(alpha: 0.2),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
               foregroundColor: kAccentPurple,
+              side: const BorderSide(color: kGlassBorder),
             ),
             onPressed: () {
               Navigator.pop(ctx);
@@ -725,6 +771,8 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                   ),
                   Text(
                     value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: kTextPrimary,
                       fontWeight: FontWeight.w600,
@@ -750,32 +798,28 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   // ─── Основной метод подключения ───────────────────────────
   Future<void> _connect() async {
     if (!mounted || _isConnecting) return;
+
+    if (!_isInitialized) {
+      setState(() => _error = 'Движок не инициализирован');
+      return;
+    }
+
+    final subUrl = _subController.text.trim();
+    if (subUrl.isEmpty) {
+      setState(() => _error = 'Введите ссылку подписки');
+      return;
+    }
+
     setState(() {
       _error = '';
       _servers = [];
       _vpnState = VpnState.testing;
     });
 
-    if (!_isInitialized) {
-      setState(() {
-        _error = 'Движок не инициализирован';
-      });
-      return;
-    }
-
-    final subUrl = _subController.text.trim();
-    if (subUrl.isEmpty) {
-      setState(() {
-        _error = 'Введите ссылку подписки';
-      });
-      return;
-    }
-
     // Единая точка сохранения/активации подписки
     _addSubscription(subUrl);
 
     try {
-      setState(() { _vpnState = VpnState.testing; });
       _cancelRequested = false;
       _syncPulse();
 
@@ -815,7 +859,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         if (!mounted) return;
         setState(() {
           _error = 'Все серверы в подписке невалидны';
-          _vpnState = VpnState.error;
+          _vpnState = VpnState.disconnected;
         });
         _syncPulse();
         return;
@@ -876,6 +920,13 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       final ServerRow? bestCandidate = selector.selectBest(sortedRows);
       final ServerRow best = bestCandidate ?? rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
 
+      // ─── Сохраняем display-состояние выбранного сервера ──────
+      setState(() {
+        _connectedServer = best.remark.isEmpty ? 'VYRE' : best.remark;
+        _connectedProtocol = _extractProtocol(best.config);
+        _notice = '';
+      });
+
       // ─── Split-tunneling: guard от пустого списка приложений ──────
       if (bestCandidate == null) {
         if (!mounted) return;
@@ -889,6 +940,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             ],
           ),
         );
+        _syncPulse();
         return;
       }
 
@@ -906,8 +958,9 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!granted) {
         setState(() {
           _error = 'Нет прав на VPN (отклонено)';
-          _vpnState = VpnState.error;
+          _vpnState = VpnState.disconnected;
         });
+        _syncPulse();
         return;
       }
 
@@ -930,7 +983,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _error = e is SubException ? e.message : getUserFriendlyError(e);
-        _vpnState = VpnState.error;
+        _vpnState = VpnState.disconnected;
       });
       _syncPulse();
     }
@@ -943,6 +996,14 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = getUserFriendlyError(e));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _connectedServer = null;
+          _connectedProtocol = null;
+          _notice = '';
+        });
+      }
     }
   }
 
@@ -950,7 +1011,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     setState(() {
       _cancelRequested = true;
       _vpnState = VpnState.disconnected;
-      _error = 'Тестирование отменено';
+      _notice = 'Тестирование отменено';
     });
     _syncPulse();
   }
@@ -1016,7 +1077,10 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (!mounted) return;
     if (data?.text != null && data!.text!.isNotEmpty) {
-      setState(() => _subController.text = data.text!);
+      setState(() {
+        _subController.text = data.text!;
+        _error = '';
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Подписка добавлена в поле. Нажмите СТАРТ для подключения.'),
@@ -1093,6 +1157,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           ],
         ),
         actions: [
+          GlassIconButton(icon: Icons.qr_code_scanner, onTap: _openQrScanner),
           GlassIconButton(icon: Icons.settings, onTap: _showSettings),
           const SizedBox(width: 8),
         ],
@@ -1118,208 +1183,187 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 12),
-                    const SizedBox(height: 28),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.link, size: 18, color: kAccentCyan),
-                              const SizedBox(width: 8),
-                              const Text('Подключение', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary)),
-                            ],
-                          ),
-                          if (_subController.text.isEmpty && _servers.isEmpty) ...[
-                            const SizedBox(height: 10),
-                            const Text(
-                              'Вставьте ссылку на подписку\nили отсканируйте QR-код',
-                              style: TextStyle(color: kTextMuted, fontSize: 13),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                              child: TextField(
-                                controller: _subController,
-                                onChanged: (_) => setState(() {}),
-                                style: const TextStyle(color: kTextPrimary, fontSize: 14),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.03),
-                                  hintText: 'Вставьте URL подписки',
-                                  hintStyle: const TextStyle(color: kTextMuted),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.content_paste, size: 20, color: kTextSecondary),
-                                        onPressed: _pasteFromClipboard,
-                                        tooltip: 'Вставить',
+                              const SizedBox(height: 20),
+                              GlassCard(
+                                padding: const EdgeInsets.all(kSpace3),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.link, size: 18, color: kAccentCyan),
+                                        const SizedBox(width: 8),
+                                        const Text('Подключение', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                                      ],
+                                    ),
+                                    if (_subController.text.isEmpty && _servers.isEmpty) ...[
+                                      const SizedBox(height: kSpace2),
+                                      const Text(
+                                        'Вставьте ссылку на подписку\nили используйте QR-код сверху',
+                                        style: TextStyle(color: kTextMuted, fontSize: 13),
                                       ),
                                     ],
-                                  ),
+                                    const SizedBox(height: kSpace2),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: BackdropFilter(
+                                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                                        child: TextField(
+                                          controller: _subController,
+                                          onChanged: (_) => setState(() { _error = ''; }),
+                                          style: const TextStyle(color: kTextPrimary, fontSize: 14),
+                                          decoration: InputDecoration(
+                                            filled: true,
+                                            fillColor: Colors.white.withValues(alpha: 0.03),
+                                            hintText: 'Вставьте URL подписки',
+                                            hintStyle: const TextStyle(color: kTextMuted),
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(14),
+                                              borderSide: BorderSide.none,
+                                            ),
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                            suffixIcon: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(Icons.content_paste, size: 20, color: kTextSecondary),
+                                                  onPressed: _pasteFromClipboard,
+                                                  tooltip: 'Вставить',
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const SizedBox(height: kSpace4),
+                              Center(
+                                child: AnimatedBuilder(
+                                  animation: Listenable.merge([_pulseAnim, _glowAnim]),
+                                  builder: (context, child) {
+                                    final isPulsing = _testing || _connected;
+                                    final scale = isPulsing ? _pulseAnim.value : 1.0;
+                                    return Semantics(
+                                      button: true,
+                                      label: _connected
+                                          ? 'Отключиться от VPN'
+                                          : (_testing || _isConnecting ? 'Отменить' : 'СТАРТ'),
+                                      enabled: _connected || canStart || _testing || _isConnecting,
+                                      child: GestureDetector(
+                                        onTap: _connected
+                                            ? _disconnect
+                                            : ((_testing || _isConnecting) ? _cancelTesting : (canStart ? _connect : null)),
+                                      child: SizedBox(
+                                        width: 220,
+                                        height: 220,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Container(
+                                              width: 220 * scale,
+                                              height: 220 * scale,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: RadialGradient(
+                                                  colors: [
+                                                    statusGlow.withValues(alpha: _glowAnim.value),
+                                                    statusGlow.withValues(alpha: 0.0),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              width: 180,
+                                              height: 180,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                gradient: LinearGradient(
+                                                  colors: _connected
+                                                      ? [
+                                                          kAccentCyan.withValues(alpha: 0.3),
+                                                          kAccentPurple.withValues(alpha: 0.2),
+                                                        ]
+                                                      : [kSurfaceLight, kSurface],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                ),
+                                                border: Border.all(
+                                                  color: _connected ? kAccentCyan.withValues(alpha: 0.4) : kGlassBorder,
+                                                  width: 1.5,
+                                                ),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: statusColor.withValues(alpha: 0.25),
+                                                    blurRadius: 40,
+                                                    spreadRadius: 4,
+                                                  ),
+                                                ],
+                                              ),
+                                              child: Center(
+                                                child: Column(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      _connected
+                                                          ? Icons.stop_rounded
+                                                          : ((_testing || _isConnecting) ? Icons.close_rounded : Icons.play_arrow_rounded),
+                                                      size: 56,
+                                                      color: (_testing || _isConnecting) ? kDanger : (_connected ? kDanger : kTextPrimary),
+                                                    ),
+                                                    const SizedBox(height: 6),
+                                                    Text(
+                                                      _connected ? 'СТОП' : ((_testing || _isConnecting) ? 'ОТМЕНА' : 'СТАРТ'),
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                        fontWeight: FontWeight.w800,
+                                                        letterSpacing: 2,
+                                                        color: kTextSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                ),
+                                );
+                              },
                             ),
                           ),
-                          const SizedBox(height: 10),
-                          TextButton.icon(
-                            onPressed: _openQrScanner,
-                            icon: const Icon(Icons.qr_code_scanner, size: 18, color: kAccentCyan),
-                            label: const Text('Сканировать QR', style: TextStyle(color: kAccentCyan)),
+                          const SizedBox(height: kSpace3),
+                          ConnectionStatusPanel(
+                            vpnState: _vpnState,
+                            notice: _notice.isEmpty ? null : _notice,
+                            error: _error.isEmpty ? null : _error,
+                            serversCount: _servers.length,
+                            bestDelayMs: _bestDelayMs,
+                            connectedServer: _connectedServer,
+                            connectedProtocol: _connectedProtocol,
+                            hasSubscription: _subController.text.isNotEmpty,
                           ),
-                          if (_testing) ...[
-                            const SizedBox(height: 12),
-                            const LinearProgressIndicator(
-                              backgroundColor: kSurfaceLight,
-                              valueColor: AlwaysStoppedAnimation<Color>(kAccentCyan),
-                              borderRadius: BorderRadius.all(Radius.circular(4)),
-                            ),
-                          ],
-                          if (_error.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(_error, style: const TextStyle(color: kDanger, fontSize: 12)),
-                          ] else if (_connected) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              '\u2714 Подключено. ${_servers.isNotEmpty && _servers.first.delayMs >= 0 ? _servers.first.delayMs : 'N/A'} мс',
-                              style: const TextStyle(fontSize: 12, color: kTextMuted),
-                            ),
-                          ] else if (_servers.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text('\u2714 Подписка загружена. Серверов: $_servers.length', style: const TextStyle(fontSize: 12, color: kTextMuted)),
-                          ] else if (_subController.text.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text('\u2714 Ссылка добавлена. Нажмите СТАРТ.', style: const TextStyle(fontSize: 12, color: kTextMuted)),
-                          ],
+                          const SizedBox(height: kSpace3),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Center(
-                      child: AnimatedBuilder(
-                        animation: Listenable.merge([_pulseAnim, _glowAnim]),
-                        builder: (context, child) {
-                          final isPulsing = _testing || _connected;
-                          final scale = isPulsing ? _pulseAnim.value : 1.0;
-                          return Semantics(
-                            button: true,
-                            label: _connected
-                                ? 'Отключиться от VPN'
-                                : (_testing || _isConnecting ? 'Отменить' : 'СТАРТ'),
-                            enabled: _connected || canStart || _testing || _isConnecting,
-                            child: GestureDetector(
-                              onTap: _connected
-                                  ? _disconnect
-                                  : ((_testing || _isConnecting) ? _cancelTesting : (canStart ? _connect : null)),
-                            child: SizedBox(
-                              width: 220,
-                              height: 220,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Container(
-                                    width: 220 * scale,
-                                    height: 220 * scale,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: RadialGradient(
-                                        colors: [
-                                          statusGlow.withValues(alpha: _glowAnim.value),
-                                          statusGlow.withValues(alpha: 0.0),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    width: 180,
-                                    height: 180,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: LinearGradient(
-                                        colors: _connected
-                                            ? [
-                                                kAccentCyan.withValues(alpha: 0.3),
-                                                kAccentPurple.withValues(alpha: 0.2),
-                                              ]
-                                            : [kSurfaceLight, kSurface],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      border: Border.all(
-                                        color: _connected ? kAccentCyan.withValues(alpha: 0.4) : kGlassBorder,
-                                        width: 1.5,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: statusColor.withValues(alpha: 0.25),
-                                          blurRadius: 40,
-                                          spreadRadius: 4,
-                                        ),
-                                      ],
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            _connected
-                                                ? Icons.stop_rounded
-                                                : ((_testing || _isConnecting) ? Icons.close_rounded : Icons.play_arrow_rounded),
-                                            size: 56,
-                                            color: (_testing || _isConnecting) ? kDanger : (_connected ? kDanger : kTextPrimary),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            _connected ? 'СТОП' : ((_testing || _isConnecting) ? 'ОТМЕНА' : 'СТАРТ'),
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: 2,
-                                              color: kTextSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                      ),
-                    ),
-                    if (_testing || _isConnecting || _vpnState == VpnState.initializing || _vpnState == VpnState.disconnecting)
-                      Text(
-                        switch (_vpnState) {
-                          VpnState.initializing => 'Инициализация...',
-                          VpnState.testing => 'Тестирование серверов...',
-                          VpnState.connecting => 'Подключение...',
-                          VpnState.disconnecting => 'Отключение...',
-                          _ => '',
-                        },
-                        style: const TextStyle(fontSize: 12, color: kTextMuted),
-                      ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
           ),
@@ -1634,21 +1678,25 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasChanges = _tempSelected.length != widget.selectedPackages.length ||
+        !_tempSelected.containsAll(widget.selectedPackages) ||
+        !widget.selectedPackages.containsAll(_tempSelected);
+
     return Scaffold(
       backgroundColor: kVoid,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Приложения для VPN'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              widget.onSave(_tempSelected);
-              Navigator.pop(context);
-            },
-            child: const Text('Сохранить', style: TextStyle(color: kAccentCyan, fontWeight: FontWeight.w700)),
-          ),
-        ],
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Приложения для VPN'),
+            Text(
+              'Выбрано: ${_tempSelected.length}',
+              style: const TextStyle(color: kTextMuted, fontSize: 12),
+            ),
+          ],
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(64),
           child: Padding(
@@ -1682,6 +1730,30 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
             ),
           ),
         ),
+        actions: [
+          if (_tempSelected.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                setState(() => _tempSelected = {});
+              },
+              child: const Text('Снять всё', style: TextStyle(color: kTextMuted)),
+            ),
+          TextButton(
+            onPressed: hasChanges
+                ? () {
+                    widget.onSave(_tempSelected);
+                    Navigator.pop(context);
+                  }
+                : null,
+            child: Text(
+              'Сохранить',
+              style: TextStyle(
+                color: hasChanges ? kAccentCyan : kTextMuted,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1689,30 +1761,77 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
         itemBuilder: (ctx, i) {
           final app = _filteredApps[i];
           final selected = _tempSelected.contains(app.packageName);
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: selected ? kAccentPurple.withValues(alpha: 0.10) : kGlass,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected ? kAccentPurple.withValues(alpha: 0.4) : kGlassBorder,
+          return InkWell(
+            onTap: () {
+              setState(() {
+                if (selected) {
+                  _tempSelected.remove(app.packageName);
+                } else {
+                  _tempSelected.add(app.packageName);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? kAccentPurple.withValues(alpha: 0.10) : kGlass,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: selected ? kAccentPurple.withValues(alpha: 0.4) : kGlassBorder,
+                ),
               ),
-            ),
-            child: CheckboxListTile(
-              activeColor: kAccentPurple,
-              checkColor: Colors.white,
-              title: Text(app.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: Text(app.packageName, style: const TextStyle(fontSize: 11, color: kTextMuted)),
-              value: selected,
-              onChanged: (v) {
-                setState(() {
-                  if (v == true) {
-                    _tempSelected.add(app.packageName);
-                  } else {
-                    _tempSelected.remove(app.packageName);
-                  }
-                });
-              },
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: kAccentPurple.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        app.name.isNotEmpty ? app.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          app.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          app.packageName,
+                          style: const TextStyle(fontSize: 11, color: kTextMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IgnorePointer(
+                    ignoring: true,
+                    child: Checkbox(
+                      value: selected,
+                      onChanged: (_) {},
+                      activeColor: kAccentPurple,
+                      checkColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -1728,11 +1847,17 @@ class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
+  final String? subtitle;
+  final Widget? trailing;
+  final Color? iconColor;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
+    this.trailing,
+    this.iconColor,
   });
 
   @override
@@ -1749,16 +1874,40 @@ class _SettingsTile extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(icon, color: kTextSecondary, size: 24),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: kGlass,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kGlassBorder),
+              ),
+              child: Icon(icon, color: iconColor ?? kTextSecondary, size: 24),
+            ),
             const SizedBox(width: 16),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle!,
+                      style: TextStyle(color: kTextMuted, fontSize: 12),
+                    ),
+                  ],
+                ],
               ),
             ),
+            if (trailing != null) trailing!,
           ],
         ),
       ),
