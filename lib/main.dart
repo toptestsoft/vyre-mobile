@@ -28,7 +28,6 @@ import 'models/vpn_state.dart';              // VpnState enum, ServerStatus, Par
 import 'utils/constants.dart';              // цвета, строки
 import 'utils/helpers.dart';                // getUserFriendlyError
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
-import 'widgets/bento_status.dart';         // BentoStatus
 
 // ═══════════════════════════════════════════════════════════
 //  VYRE VPN — 2026 CYBER-GLASS AESTHETIC (fixed build)
@@ -105,17 +104,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   bool get _connected => _vpnState.isConnected;
   bool get _testing => _vpnState == VpnState.testing;
   bool get _isConnecting => _vpnState.isBusy;
-  String get _statusText => _vpnLabel(_vpnState);
-
-  String _vpnLabel(VpnState s) => switch (s) {
-        VpnState.initializing => 'Инициализация…',
-        VpnState.disconnected => 'Отключено',
-        VpnState.testing => 'Проверка серверов…',
-        VpnState.connecting => 'Подключение…',
-        VpnState.connected => 'Подключено',
-        VpnState.disconnecting => 'Отключение…',
-        VpnState.error => 'Ошибка',
-      };
 
   final SubscriptionRepository _repo = SubscriptionRepository();
   late final SubscriptionService _subs = SubscriptionService(_subCache);
@@ -137,14 +125,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   late AnimationController _glowController;
   late Animation<double> _pulseAnim;
   late Animation<double> _glowAnim;
-
-  SubscriptionItem? get _activeSub {
-    if (_activeSubscriptionId == null) return null;
-    for (final s in _subscriptions) {
-      if (s.id == _activeSubscriptionId) return s;
-    }
-    return null;
-  }
 
   @override
   void initState() {
@@ -1145,13 +1125,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    BentoStatus(
-                      connected: _connected,
-                      statusText: _statusText,
-                      selectedCount: _vpnRoutedPackages.length,
-                      serverCount: _servers.length,
-                      activeSub: _activeSub?.name,
-                    ),
                     const SizedBox(height: 28),
                     GlassCard(
                       padding: const EdgeInsets.all(16),
@@ -1334,6 +1307,17 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                       },
                       ),
                     ),
+                    if (_testing || _isConnecting || _vpnState == VpnState.initializing || _vpnState == VpnState.disconnecting)
+                      Text(
+                        switch (_vpnState) {
+                          VpnState.initializing => 'Инициализация...',
+                          VpnState.testing => 'Тестирование серверов...',
+                          VpnState.connecting => 'Подключение...',
+                          VpnState.disconnecting => 'Отключение...',
+                          _ => '',
+                        },
+                        style: const TextStyle(fontSize: 12, color: kTextMuted),
+                      ),
                     const SizedBox(height: 24),
                   ],
                 ),

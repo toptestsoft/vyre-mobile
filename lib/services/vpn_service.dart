@@ -51,8 +51,12 @@ class VpnService {
       },
     ));
     _engine = v2ray;
-    await v2ray.initializeV2Ray();
-    _initialized = true;
+    try {
+      await v2ray.initializeV2Ray().timeout(const Duration(seconds: 20));
+      _initialized = true;
+    } catch (e) {
+      throw Exception('Не удалось запустить движок VPN. Перезапустите приложение.');
+    }
   }
 
   Future<bool> requestPermission() => _engine!.requestPermission();
