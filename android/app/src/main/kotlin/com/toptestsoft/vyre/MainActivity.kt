@@ -15,7 +15,7 @@ class MainActivity : FlutterActivity() {
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
       when (call.method) {
         "isAlwaysOnVpnEnabled" -> {
-          val alwaysOn = Settings.Secure.getString(contentResolver, Settings.Secure.ALWAYS_ON_VPN_APP)
+          val alwaysOn = Settings.Secure.getString(contentResolver, "always_on_vpn_app")
           result.success(alwaysOn == packageName)
         }
         "isLockdownEnabled" -> {

@@ -88,7 +88,7 @@ class GlassIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scale = MediaQuery.maybeOf(context)?.textScaler.scale(1.0) ?? 1.0;
-    final buttonSize = (44 * scale).clamp(44.0, 56.0);
+    final buttonSize = (48 * scale).clamp(48.0, 60.0);
     final iconSize = (24 * scale).clamp(24.0, 32.0);
 
     return Padding(

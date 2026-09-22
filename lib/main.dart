@@ -29,7 +29,6 @@ import 'utils/constants.dart';              // цвета, строки
 import 'utils/helpers.dart';                // getUserFriendlyError
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
 import 'widgets/bento_status.dart';         // BentoStatus
-import 'widgets/servers_sheet.dart';        // ServersSheet
 
 // ═══════════════════════════════════════════════════════════
 //  VYRE VPN — 2026 CYBER-GLASS AESTHETIC (fixed build)
@@ -1034,15 +1033,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
-  void _showServersSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => ServersSheet(servers: _servers, bestServer: _bestServer),
-    );
-  }
-
   // ─── Вставка из буфера ────────────────────────────────────
   Future<void> _pasteFromClipboard() async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
@@ -1067,7 +1057,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     }
   }
 
-  // ─── BUILD ─────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final statusColor = _connected ? kSuccess : kDanger;
@@ -1166,6 +1155,92 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                       activeSub: _activeSub?.name,
                     ),
                     const SizedBox(height: 28),
+                    GlassCard(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.link, size: 18, color: kAccentCyan),
+                              const SizedBox(width: 8),
+                              const Text('Подключение', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary)),
+                            ],
+                          ),
+                          if (_subController.text.isEmpty && _servers.isEmpty) ...[
+                            const SizedBox(height: 10),
+                            const Text(
+                              'Вставьте ссылку на подписку\nили отсканируйте QR-код',
+                              style: TextStyle(color: kTextMuted, fontSize: 13),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                              child: TextField(
+                                controller: _subController,
+                                onChanged: (_) => setState(() {}),
+                                style: const TextStyle(color: kTextPrimary, fontSize: 14),
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: Colors.white.withValues(alpha: 0.03),
+                                  hintText: 'Вставьте URL подписки',
+                                  hintStyle: const TextStyle(color: kTextMuted),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  suffixIcon: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.content_paste, size: 20, color: kTextSecondary),
+                                        onPressed: _pasteFromClipboard,
+                                        tooltip: 'Вставить',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextButton.icon(
+                            onPressed: _openQrScanner,
+                            icon: const Icon(Icons.qr_code_scanner, size: 18, color: kAccentCyan),
+                            label: const Text('Сканировать QR', style: TextStyle(color: kAccentCyan)),
+                          ),
+                          if (_testing) ...[
+                            const SizedBox(height: 12),
+                            const LinearProgressIndicator(
+                              backgroundColor: kSurfaceLight,
+                              valueColor: AlwaysStoppedAnimation<Color>(kAccentCyan),
+                              borderRadius: BorderRadius.all(Radius.circular(4)),
+                            ),
+                          ],
+                          if (_error.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(_error, style: const TextStyle(color: kDanger, fontSize: 12)),
+                          ] else if (_connected) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              '\u2714 Подключено. ${_servers.isNotEmpty && _servers.first.delayMs >= 0 ? _servers.first.delayMs : 'N/A'} мс',
+                              style: const TextStyle(fontSize: 12, color: kTextMuted),
+                            ),
+                          ] else if (_servers.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text('\u2714 Подписка загружена. Серверов: $_servers.length', style: const TextStyle(fontSize: 12, color: kTextMuted)),
+                          ] else if (_subController.text.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text('\u2714 Ссылка добавлена. Нажмите СТАРТ.', style: const TextStyle(fontSize: 12, color: kTextMuted)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     Center(
                       child: AnimatedBuilder(
                         animation: Listenable.merge([_pulseAnim, _glowAnim]),
@@ -1258,156 +1333,9 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                             ),
                           ),
                         );
-                        },
+                      },
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    if (_servers.isNotEmpty)
-                      Center(
-                        child: GlassCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          radius: 24,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: statusColor,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _servers.first.remark.isEmpty ? 'Быстрый сервер' : _servers.first.remark,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                              ),
-                              if (_servers.first.delayMs >= 0) ...[
-                                const SizedBox(width: 6),
-                                Text('${_servers.first.delayMs} мс', style: const TextStyle(fontSize: 12, color: kTextMuted)),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    GlassCard(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.link, size: 18, color: kAccentCyan),
-                              const SizedBox(width: 8),
-                              const Text('Ссылка подписки', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary)),
-                              const Spacer(),
-                              if (_subController.text.length > 8)
-                                GestureDetector(
-                                  onTap: () {
-                                    _subController.clear();
-                                    setState(() {});
-                                  },
-                                  child: const Icon(Icons.close, size: 18, color: kTextMuted),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(14),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                              child: TextField(
-                                controller: _subController,
-                                onChanged: (_) => setState(() {}),
-                                style: const TextStyle(color: kTextPrimary, fontSize: 14),
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: Colors.white.withValues(alpha: 0.03),
-                                  hintText: 'Вставьте URL подписки',
-                                  hintStyle: const TextStyle(color: kTextMuted),
-                                  helperText: 'Затем нажмите СТАРТ для подключения',
-                                  helperMaxLines: 2,
-                                  helperStyle: const TextStyle(color: kTextMuted),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                  suffixIcon: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.content_paste, size: 20, color: kTextSecondary),
-                                        onPressed: _pasteFromClipboard,
-                                        tooltip: 'Вставить',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (_testing) ...[
-                            const SizedBox(height: 12),
-                            const LinearProgressIndicator(
-                              backgroundColor: kSurfaceLight,
-                              valueColor: AlwaysStoppedAnimation<Color>(kAccentCyan),
-                              borderRadius: BorderRadius.all(Radius.circular(4)),
-                            ),
-                          ],
-                          if (_error.isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Text(_error, style: const TextStyle(color: kDanger, fontSize: 12)),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_servers.isNotEmpty)
-                      GestureDetector(
-                        onTap: _showServersSheet,
-                        child: GlassCard(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.dns, color: kAccentPurple, size: 20),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text('Доступные серверы', style: TextStyle(fontWeight: FontWeight.w600)),
-                                    Text(
-                                      '${_servers.length} найдено · Лучший: ${_servers.first.delayMs >= 0 ? '${_servers.first.delayMs} мс' : 'N/A'}',
-                                      style: const TextStyle(fontSize: 12, color: kTextMuted),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.keyboard_arrow_up, color: kTextMuted),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      GlassCard(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                        tint: Colors.white.withValues(alpha: 0.02),
-                        child: Row(
-                          children: [
-                            Icon(Icons.cloud_off, color: kTextMuted.withValues(alpha: 0.5), size: 24),
-                            const SizedBox(width: 14),
-                            const Expanded(
-                              child: Text(
-                                'Нет серверов. Введите ссылку и нажмите СТАРТ',
-                                style: TextStyle(color: kTextMuted, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     const SizedBox(height: 24),
                   ],
                 ),
