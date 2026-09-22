@@ -323,6 +323,12 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     }
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message, style: TextStyle(color: Colors.white)), backgroundColor: kDanger),
+    );
+  }
+
   Future<void> _openTelegramChannel() async {
     final uri = Uri.parse('https://t.me/$kTelegramChannel');
     try {
@@ -336,12 +342,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() => _error = getUserFriendlyError(e));
     }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message, style: TextStyle(color: Colors.white)), backgroundColor: kDanger),
-    );
   }
 
   Future<void> _checkForUpdates() async {
@@ -451,6 +451,66 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _showSettings() async {
+    if (!mounted) return;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.6,
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF0a0a1a),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            _SettingsTile(
+              icon: Icons.apps,
+              title: 'Приложения',
+              onTap: () {
+                Navigator.pop(ctx);
+                _openAppSelection();
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.list_alt,
+              title: 'Подписки',
+              onTap: () {
+                Navigator.pop(ctx);
+                _showManageSubscriptions();
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.security,
+              title: 'Always-on VPN',
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAlwaysOnVpnDialog();
+              },
+            ),
+            const SizedBox(height: 8),
+            _SettingsTile(
+              icon: Icons.info_outline,
+              title: 'Информация',
+              onTap: () {
+                Navigator.pop(ctx);
+                _showAboutApp();
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAboutApp() async {
     final packageInfo = await PackageInfo.fromPlatform();
     final version = '${packageInfo.version}+${packageInfo.buildNumber}';
@@ -536,15 +596,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
               padding: EdgeInsets.symmetric(vertical: 12),
               child: Divider(color: kGlassBorder, height: 1),
             ),
-            // Telegram
-            _buildLinkRow(
-              icon: Icons.telegram,
-              iconColor: kAccentCyan,
-              title: 'Telegram-канал',
-              value: '@$kTelegramChannel',
-              onTap: _openTelegramChannel,
-            ),
-            const SizedBox(height: 8),
             // GitHub
             _buildLinkRow(
               icon: Icons.code,
@@ -552,6 +603,15 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
               title: 'Исходный код',
               value: 'toptestsoft/vyre-mobile',
               onTap: () async { final uri = Uri.parse(kGithubUrl); if (await canLaunchUrl(uri)) { await launchUrl(uri, mode: LaunchMode.externalApplication); } },
+            ),
+            const SizedBox(height: 8),
+            // Telegram
+            _buildLinkRow(
+              icon: Icons.telegram,
+              iconColor: kAccentCyan,
+              title: 'Telegram-канал',
+              value: '@$kTelegramChannel',
+              onTap: _openTelegramChannel,
             ),
             const SizedBox(height: 8),
             // Privacy
@@ -1051,21 +1111,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         ),
         actions: [
           GlassIconButton(icon: Icons.qr_code_scanner, onTap: _openQrScanner),
-          GlassIconButton(icon: Icons.apps, onTap: _openAppSelection),
-          GlassIconButton(
-            icon: Icons.telegram,
-            onTap: _openTelegramChannel,
-            tooltip: 'Подписка в Telegram',
-          ),
-          GlassIconButton(
-            icon: Icons.info_outline,
-            onTap: _showAboutApp,
-            tooltip: 'О приложении',
-          ),
-          GlassIconButton(
-            icon: Icons.more_vert,
-            onTap: _showManageSubscriptions,
-          ),
+          GlassIconButton(icon: Icons.settings, onTap: _showSettings),
           const SizedBox(width: 8),
         ],
       ),
@@ -1750,6 +1796,48 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
 // ═══════════════════════════════════════════════════════════
 //  QR SCANNER SCREEN
 // ═══════════════════════════════════════════════════════════
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        decoration: BoxDecoration(
+          color: kGlass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kGlassBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: kTextSecondary, size: 24),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class QrScannerScreen extends StatefulWidget {
   const QrScannerScreen({super.key});
 

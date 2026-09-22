@@ -87,19 +87,24 @@ class GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scale = MediaQuery.maybeOf(context)?.textScaler.scale(1.0) ?? 1.0;
+    final buttonSize = (44 * scale).clamp(44.0, 56.0);
+    final iconSize = (24 * scale).clamp(24.0, 32.0);
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: EdgeInsets.symmetric(horizontal: 4 * scale),
       child: GestureDetector(
         onTap: onTap,
+        behavior: HitTestBehavior.opaque,
         child: Container(
-          width: 34,
-          height: 34,
+          width: buttonSize,
+          height: buttonSize,
           decoration: BoxDecoration(
             color: kGlass,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: kGlassBorder),
           ),
-          child: Icon(icon, color: kTextSecondary, size: 17),
+          child: Icon(icon, color: Colors.white, size: iconSize),
         ),
       ),
     );
