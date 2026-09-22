@@ -21,10 +21,24 @@ const Color kTextMuted = Color(0xFF64748B);
 const Color kSuccess = Color(0xFF22C55E);
 const Color kDanger = Color(0xFFEF4444);
 
-// ─── Шрифты ───
+// ─── Design tokens ─────────────────────────────────────────
+const double kSpace1 = 8.0;
+const double kSpace2 = 12.0;
+const double kSpace3 = 16.0;
+const double kSpace4 = 24.0;
+const double kSpace5 = 32.0;
+
+const double kRadiusCard = 20.0;
+
+const Color kStatusNeutral = kTextMuted;
+const Color kStatusAccent = kAccentPurple;
+const Color kStatusOk = kSuccess;
+const Color kStatusErr = kDanger;
+
+// ─── Шрифты ────────────────────────────────────────────────
 const String kFont = 'Inter';
 
-// ─── Строки ───
+// ─── Строки ────────────────────────────────────────────────
 const String kTelegramBot = 'VYREPayBot';
 const String kTelegramChannel = 'VYREPrivacy';
 const String kGithubUrl = 'https://github.com/toptestsoft/vyre-mobile';
