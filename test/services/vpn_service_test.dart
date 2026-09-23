@@ -54,9 +54,6 @@ class FakeV2rayEngine implements V2rayEngine {
     if (failRequestPermission) return false;
     return true;
   }
-
-  @override
-  Future<int> getConnectedServerDelay() async => 50;
 }
 
 void main() {

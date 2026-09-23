@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/services.dart';
@@ -14,7 +13,6 @@ import 'services/subscription_cache.dart';
 import 'services/update_service.dart';
 import 'services/config_validator.dart';
 import 'services/config_normalizer.dart';
-import 'services/android_vpn_service.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -133,7 +131,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   final SubscriptionCache _subCache = SubscriptionCache();
   bool _isInitialized = false;
   bool _disposed = false;       // 🔒 защита async-хвостов после dispose
-  bool _alwaysOnVpnDialogShown = false;
   bool _cancelRequested = false;
 
   List<AppInfo> _allApps = [];
@@ -426,42 +423,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _showAlwaysOnVpnDialog() async {
-    if (!mounted) return;
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0a0a1a),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Включить защиту от утечек?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Для максимальной безопасности рекомендуем включить Always-on VPN с опцией "Блокировать подключения без VPN". '
-          'Это предотвратит утечку трафика при разрыве соединения.',
-          style: TextStyle(color: kTextSecondary, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final androidVpn = AndroidVpnService();
-              await androidVpn.requestAlwaysOnVpn();
-            },
-            child: const Text('Открыть настройки', style: TextStyle(color: kAccentCyan)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Пропустить', style: TextStyle(color: kTextSecondary)),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _showSettings() async {
-    if (!mounted) return;
-    final androidVpn = AndroidVpnService();
-    final alwaysOn = await androidVpn.isAlwaysOnVpnEnabled();
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
@@ -494,17 +456,6 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
               onTap: () {
                 Navigator.pop(ctx);
                 _showManageSubscriptions();
-              },
-            ),
-            const SizedBox(height: 8),
-            _SettingsTile(
-              icon: Icons.security,
-              title: 'Always-on VPN',
-              subtitle: alwaysOn ? 'Включено' : 'Выключено',
-              trailing: const Icon(Icons.chevron_right, color: kTextMuted, size: 20),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showAlwaysOnVpnDialog();
               },
             ),
             const SizedBox(height: 8),
@@ -962,25 +913,19 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         });
         _syncPulse();
         return;
-      }
-
-      if (Platform.isAndroid && !_alwaysOnVpnDialogShown) {
-        _alwaysOnVpnDialogShown = true;
-        final androidVpn = AndroidVpnService();
-        final alwaysOn = await androidVpn.isAlwaysOnVpnEnabled();
-        if (!alwaysOn && mounted) {
-          await _showAlwaysOnVpnDialog();
         }
-      }
 
-      setState(() { _vpnState = VpnState.connecting; });
-      await _vpn.connect(
+        setState(() { _vpnState = VpnState.connecting; });
+        await _vpn.connect(
         remark: best.remark.isEmpty ? 'VYRE' : best.remark,
         config: best.config,
         blockedApps: blockedAppsList,
       );
     } catch (e) {
       if (!mounted) return;
+      try {
+        await _vpn.disconnect();
+      } catch (_) {}
       setState(() {
         _error = e is SubException ? e.message : getUserFriendlyError(e);
         _vpnState = VpnState.disconnected;
@@ -1847,16 +1792,12 @@ class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
-  final String? subtitle;
-  final Widget? trailing;
   final Color? iconColor;
 
   const _SettingsTile({
     required this.icon,
     required this.title,
     required this.onTap,
-    this.subtitle,
-    this.trailing,
     this.iconColor,
   });
 
@@ -1897,17 +1838,9 @@ class _SettingsTile extends StatelessWidget {
                       color: Colors.white,
                     ),
                   ),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle!,
-                      style: TextStyle(color: kTextMuted, fontSize: 12),
-                    ),
-                  ],
                 ],
               ),
             ),
-            if (trailing != null) trailing!,
           ],
         ),
       ),

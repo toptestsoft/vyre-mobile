@@ -7,7 +7,6 @@ abstract class V2rayEngine {
   Future<void> stopV2Ray();
   Future<int> getServerDelay({required String config});
   Future<bool> requestPermission();
-  Future<int> getConnectedServerDelay();
 }
 
 class _FlutterV2rayAdapter implements V2rayEngine {
@@ -29,9 +28,6 @@ class _FlutterV2rayAdapter implements V2rayEngine {
 
   @override
   Future<bool> requestPermission() => _v2ray.requestPermission();
-
-  @override
-  Future<int> getConnectedServerDelay() => _v2ray.getConnectedServerDelay();
 }
 
 /// Единственная точка контакта с движком VPN.

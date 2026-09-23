@@ -62,6 +62,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+dependency_overrides:
+  flutter_v2ray:
+    path: third_party/flutter_v2ray
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
