@@ -23,12 +23,21 @@ import java.io.FileDescriptor;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class V2rayVPNService extends VpnService implements V2rayServicesListener {
+    private static final String TAG = "V2rayVPNService";
     private ParcelFileDescriptor mInterface;
     private Process process;
     private V2rayConfig v2rayConfig;
     private boolean isRunning = true;
+
+    private static class FdDeliveryContext {
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean delivered = new AtomicBoolean(false);
+    }
 
     @Override
     public void onCreate() {
@@ -105,10 +114,10 @@ public class V2rayVPNService extends VpnService implements V2rayServicesListener
 
     }
 
-    private void setup() {
+    private boolean setup() {
         Intent prepare_intent = prepare(this);
         if (prepare_intent != null) {
-            return;
+            return false;
         }
         Builder builder = new Builder();
         builder.setSession(v2rayConfig.REMARK);
@@ -159,26 +168,42 @@ public class V2rayVPNService extends VpnService implements V2rayServicesListener
         try {
             mInterface = builder.establish();
             isRunning = true;
-            runTun2socks();
+            boolean started = runTun2socks();
+            if (!started) {
+                stopAllProcess();
+                return false;
+            }
+            return true;
         } catch (Exception e) {
             stopAllProcess();
+            return false;
         }
-
     }
 
-    private void runTun2socks() {
-        ArrayList<String> cmd = new ArrayList<>(Arrays.asList(new File(getApplicationInfo().nativeLibraryDir, "libtun2socks.so").getAbsolutePath(),
-                "--netif-ipaddr", "26.26.26.2",
-                "--netif-netmask", "255.255.255.252",
-                "--socks-server-addr", "127.0.0.1:" + v2rayConfig.LOCAL_SOCKS5_PORT,
-                "--tunmtu", "1500",
-                "--sock-path", "sock_path",
-                "--enable-udprelay",
-                "--loglevel", "error"));
+    private boolean runTun2socks() {
+        ArrayList<String> cmd = new ArrayList<>(Arrays.asList(
+            new File(getApplicationInfo().nativeLibraryDir, "libtun2socks.so").getAbsolutePath(),
+            "--netif-ipaddr", "26.26.26.2",
+            "--netif-netmask", "255.255.255.252",
+            "--socks-server-addr", "127.0.0.1:" + v2rayConfig.LOCAL_SOCKS5_PORT,
+            "--tunmtu", "1500",
+            "--sock-path", "sock_path",
+            "--enable-udprelay",
+            "--loglevel", "error"));
         try {
             ProcessBuilder processBuilder = new ProcessBuilder(cmd);
             processBuilder.redirectErrorStream(true);
             process = processBuilder.directory(getApplicationContext().getFilesDir()).start();
+
+            FdDeliveryContext ctx = new FdDeliveryContext();
+            sendFileDescriptor(ctx);
+
+            boolean fdSent = waitForFdDelivery(ctx, 2000);
+            if (!fdSent) {
+                Log.e(TAG, "Failed to deliver TUN FD to tun2socks");
+                return false;
+            }
+
             new Thread(() -> {
                 try {
                     process.waitFor();
@@ -189,40 +214,63 @@ public class V2rayVPNService extends VpnService implements V2rayServicesListener
                     //ignore
                 }
             }, "Tun2socks_Thread").start();
-            sendFileDescriptor();
+            return true;
         } catch (Exception e) {
             Log.e("VPN_SERVICE", "FAILED=>", e);
             this.onDestroy();
+            return false;
         }
     }
 
-    private void sendFileDescriptor() {
+    private boolean waitForFdDelivery(FdDeliveryContext ctx, long timeoutMs) {
+        try {
+            boolean completed = ctx.latch.await(timeoutMs, TimeUnit.MILLISECONDS);
+            if (!completed) {
+                Log.e(TAG, "FD delivery timeout after " + timeoutMs + "ms");
+            }
+            return completed && ctx.delivered.get();
+        } catch (InterruptedException e) {
+            Log.e(TAG, "FD delivery interrupted", e);
+            return false;
+        }
+    }
+
+    private void sendFileDescriptor(FdDeliveryContext ctx) {
         String localSocksFile = new File(getApplicationContext().getFilesDir(), "sock_path").getAbsolutePath();
         FileDescriptor tunFd = mInterface.getFileDescriptor();
         new Thread(() -> {
             int tries = 0;
-            while (true) {
-                try {
-                    Thread.sleep(50L * tries);
-                    LocalSocket clientLocalSocket = new LocalSocket();
-                    clientLocalSocket.connect(new LocalSocketAddress(localSocksFile, LocalSocketAddress.Namespace.FILESYSTEM));
-                    if (!clientLocalSocket.isConnected()) {
-                        Log.e("SOCK_FILE", "Unable to connect to localSocksFile [" + localSocksFile + "]");
-                    } else {
-                        Log.e("SOCK_FILE", "connected to sock file [" + localSocksFile + "]");
+            try {
+                while (true) {
+                    try {
+                        Thread.sleep(50L * tries);
+                        LocalSocket clientLocalSocket = new LocalSocket();
+                        clientLocalSocket.connect(new LocalSocketAddress(localSocksFile, LocalSocketAddress.Namespace.FILESYSTEM));
+                        if (!clientLocalSocket.isConnected()) {
+                            Log.e("SOCK_FILE", "Unable to connect to localSocksFile [" + localSocksFile + "]");
+                        } else {
+                            Log.e("SOCK_FILE", "connected to sock file [" + localSocksFile + "]");
+                        }
+                        OutputStream clientOutStream = clientLocalSocket.getOutputStream();
+                        clientLocalSocket.setFileDescriptorsForSend(new FileDescriptor[]{tunFd});
+                        clientOutStream.write(32);
+                        clientLocalSocket.setFileDescriptorsForSend(null);
+                        clientLocalSocket.shutdownOutput();
+                        clientLocalSocket.close();
+                        ctx.delivered.set(true);
+                        Log.e(TAG, "sendFd success => FD delivered, attempt " + (tries + 1));
+                        break;
+                    } catch (Exception e) {
+                        Log.e(V2rayVPNService.class.getSimpleName(), "sendFd failed => attempt " + (tries + 1) + "/6", e);
+                        if (tries > 5) {
+                            ctx.delivered.set(false);
+                            break;
+                        }
+                        tries += 1;
                     }
-                    OutputStream clientOutStream = clientLocalSocket.getOutputStream();
-                    clientLocalSocket.setFileDescriptorsForSend(new FileDescriptor[]{tunFd});
-                    clientOutStream.write(32);
-                    clientLocalSocket.setFileDescriptorsForSend(null);
-                    clientLocalSocket.shutdownOutput();
-                    clientLocalSocket.close();
-                    break;
-                } catch (Exception e) {
-                    Log.e(V2rayVPNService.class.getSimpleName(), "sendFd failed =>", e);
-                    if (tries > 5) break;
-                    tries += 1;
                 }
+            } finally {
+                ctx.latch.countDown();
             }
         }, "sendFd_Thread").start();
     }
@@ -249,8 +297,8 @@ public class V2rayVPNService extends VpnService implements V2rayServicesListener
     }
 
     @Override
-    public void startService() {
-        setup();
+    public boolean startService() {
+        return setup();
     }
 
     @Override

@@ -77,8 +77,10 @@ public class V2rayProxyOnlyService extends Service implements V2rayServicesListe
     }
 
     @Override
-    public void startService() {
-        //ignore
+    public boolean startService() {
+        // Proxy-only mode does not use TUN/FD delivery.
+        // Always treated as success here; real failure paths are in VPN_TUN service.
+        return true;
     }
 
     @Override

@@ -14,6 +14,9 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.CountDownTimer;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.util.Log;
 
 import androidx.annotation.RequiresApi;
@@ -73,19 +76,51 @@ public final class V2rayCoreManager {
 
         @Override
         public long setup(String s) {
-            if (v2rayServicesListener != null) {
+            if (v2rayServicesListener != null && setupAllowed) {
                 try {
-                    v2rayServicesListener.startService();
+                    boolean success = v2rayServicesListener.startService();
+                    if (!success) {
+                        Log.e(V2rayCoreManager.class.getSimpleName(), "setup fail => stopCore");
+                        setupFailed = true;
+                        V2rayCoreManager.getInstance().stopCore();
+                        if (setupLatch != null) {
+                            setupLatch.countDown();
+                        }
+                        return -1;
+                    }
+                    V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTED;
+                    if (isV2rayCoreRunning() && pendingConfig != null) {
+                        showNotification(pendingConfig);
+                        pendingConfig = null;
+                    }
                 } catch (Exception e) {
                     Log.e(V2rayCoreManager.class.getSimpleName(), "setup failed => ", e);
+                    setupFailed = true;
+                    V2rayCoreManager.getInstance().stopCore();
+                    if (setupLatch != null) {
+                        setupLatch.countDown();
+                    }
                     return -1;
                 }
+            } else if (v2rayServicesListener != null && !setupAllowed) {
+                Log.w(V2rayCoreManager.class.getSimpleName(), "late setup blocked by setupAllowed guard");
+                if (setupLatch != null) {
+                    setupLatch.countDown();
+                }
+                return 0;
+            }
+            if (setupLatch != null) {
+                setupLatch.countDown();
             }
             return 0;
         }
     }, Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1);
     public AppConfigs.V2RAY_STATES V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_DISCONNECTED;
     private boolean isLibV2rayCoreInitialized = false;
+    private V2rayConfig pendingConfig;
+    private CountDownLatch setupLatch;
+    private boolean setupFailed;
+    private boolean setupAllowed = false;
     private CountDownTimer countDownTimer;
     private int seconds, minutes, hours;
     private long totalDownload, totalUpload, uploadSpeed, downloadSpeed;
@@ -164,6 +199,7 @@ public final class V2rayCoreManager {
     }
 
     public boolean startCore(final V2rayConfig v2rayConfig) {
+        pendingConfig = v2rayConfig;
         makeDurationTimer(v2rayServicesListener.getService().getApplicationContext(),
                 v2rayConfig.ENABLE_TRAFFIC_STATICS);
         V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTING;
@@ -174,22 +210,40 @@ public final class V2rayCoreManager {
         if (isV2rayCoreRunning()) {
             stopCore();
         }
+        setupFailed = false;
+        setupLatch = new CountDownLatch(1);
         try {
             v2RayPoint.setConfigureFileContent(v2rayConfig.V2RAY_FULL_JSON_CONFIG);
             v2RayPoint.setDomainName(v2rayConfig.CONNECTED_V2RAY_SERVER_ADDRESS + ":" + v2rayConfig.CONNECTED_V2RAY_SERVER_PORT);
+            setupAllowed = true;
             v2RayPoint.runLoop(false);
-            V2RAY_STATE = AppConfigs.V2RAY_STATES.V2RAY_CONNECTED;
-            if (isV2rayCoreRunning()) {
-                showNotification(v2rayConfig);
-            }
         } catch (Exception e) {
             Log.e(V2rayCoreManager.class.getSimpleName(), "startCore failed =>", e);
+            setupAllowed = false;
+            if (setupLatch != null && setupLatch.getCount() > 0) {
+                setupLatch.countDown();
+            }
+            return false;
+        }
+        try {
+            boolean completed = setupLatch.await(5000, TimeUnit.MILLISECONDS);
+            if (!completed || setupFailed) {
+                Log.e(V2rayCoreManager.class.getSimpleName(), "startCore failed => setup timeout or failed");
+                setupAllowed = false;
+                stopCore();
+                return false;
+            }
+        } catch (InterruptedException e) {
+            Log.e(V2rayCoreManager.class.getSimpleName(), "startCore interrupted =>", e);
+            setupAllowed = false;
+            stopCore();
             return false;
         }
         return true;
     }
 
     public void stopCore() {
+        setupAllowed = false;
         try {
             NotificationManager notificationManager = (NotificationManager) v2rayServicesListener.getService().getSystemService(Context.NOTIFICATION_SERVICE);
             if (notificationManager != null) {
@@ -205,6 +259,10 @@ public final class V2rayCoreManager {
             sendDisconnectedBroadCast();
         } catch (Exception e) {
             Log.e(V2rayCoreManager.class.getSimpleName(), "stopCore failed =>", e);
+        } finally {
+            setupFailed = false;
+            setupLatch = null;
+            pendingConfig = null;
         }
     }
 
@@ -221,9 +279,9 @@ public final class V2rayCoreManager {
             connection_info_intent.putExtra("STATE", V2rayCoreManager.getInstance().V2RAY_STATE);
             connection_info_intent.putExtra("DURATION", SERVICE_DURATION);
             connection_info_intent.putExtra("UPLOAD_SPEED", uploadSpeed);
-            connection_info_intent.putExtra("DOWNLOAD_SPEED", uploadSpeed);
-            connection_info_intent.putExtra("UPLOAD_TRAFFIC", uploadSpeed);
-            connection_info_intent.putExtra("DOWNLOAD_TRAFFIC", uploadSpeed);
+            connection_info_intent.putExtra("DOWNLOAD_SPEED", downloadSpeed);
+            connection_info_intent.putExtra("UPLOAD_TRAFFIC", totalUpload);
+            connection_info_intent.putExtra("DOWNLOAD_TRAFFIC", totalDownload);
             try {
                 v2rayServicesListener.getService().getApplicationContext().sendBroadcast(connection_info_intent);
             } catch (Exception e) {
@@ -312,7 +370,6 @@ public final class V2rayCoreManager {
 
         context.startForeground(NOTIFICATION_ID, notificationBuilder.build());
     }
-
 
     public boolean isV2rayCoreRunning() {
         if (v2RayPoint != null) {
