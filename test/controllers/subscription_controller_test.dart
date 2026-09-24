@@ -13,56 +13,71 @@ class FakeVpnService implements VpnService {
 
   FakeVpnService(this.onStateChanged);
 
+  @override
   Future<void> initialize() async {
     onStateChanged(VpnState.disconnected, 'DISCONNECTED');
   }
 
+  @override
   Future<bool> requestPermission() async => true;
 
+  @override
   Future<void> connect({required String remark, required String config, List<String>? blockedApps}) async {}
 
+  @override
   Future<void> disconnect() async {}
 
+  @override
   Future<int> pingServer(String config) async => 100;
 
+  @override
   void setInitializedForTests(bool value) {}
 
+  @override
   bool get isInitialized => true;
 }
 
 class FakeSubscriptionServiceEmpty implements SubscriptionService {
-  @override
   final SubscriptionCache cache;
 
   FakeSubscriptionServiceEmpty(this.cache);
 
+  @override
   bool isSingleLink(String url) => false;
 
+  @override
   Future<String> fetch(String url) async => 'invalid';
 
+  @override
   List<V2RayURL> parseToV2RayUrls(String body, {required bool isSingleLink}) => <V2RayURL>[];
 
+  @override
   ParseResult parse(String body, {required bool isSingleLink}) => const ParseResult(servers: []);
 
+  @override
   V2RayURL parseOne(String line) => FlutterV2ray.parseFromURL('vless://test');
 }
 
 class FakeSubscriptionService implements SubscriptionService {
-  @override
   final SubscriptionCache cache;
 
   FakeSubscriptionService(this.cache);
 
+  @override
   bool isSingleLink(String url) => false;
 
+  @override
   Future<String> fetch(String url) async => 'vless://test';
 
+  @override
   List<V2RayURL> parseToV2RayUrls(String body, {required bool isSingleLink}) {
     return [FlutterV2ray.parseFromURL('vless://test')];
   }
 
+  @override
   ParseResult parse(String body, {required bool isSingleLink}) => const ParseResult(servers: []);
 
+  @override
   V2RayURL parseOne(String line) => FlutterV2ray.parseFromURL('vless://test');
 }
 
