@@ -1,5 +1,14 @@
 import 'dart:convert';
 
+/// Бизнес-ошибка подписки: не проходит через getUserFriendlyError,
+/// показывается пользователю как есть.
+class SubException implements Exception {
+  final String message;
+  const SubException(this.message);
+  @override
+  String toString() => message;
+}
+
 /// Преобразует технические ошибки в понятные сообщения
 String getUserFriendlyError(dynamic e) {
   final s = e.toString().toLowerCase();

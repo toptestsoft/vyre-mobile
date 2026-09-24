@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui';
 import 'dart:math';
 import 'package:flutter/services.dart';
-import 'package:flutter_v2ray/flutter_v2ray.dart';
 import 'services/vpn_service.dart';
 import 'services/subscription_repository.dart';
 import 'services/subscription_service.dart';
-import 'services/server_selector.dart';
+import 'services/subscription_storage.dart';
 import 'services/subscription_cache.dart';
 import 'services/update_service.dart';
-import 'services/config_validator.dart';
-import 'services/config_normalizer.dart';
 import 'package:installed_apps/installed_apps.dart';
 import 'package:installed_apps/app_info.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -22,24 +18,17 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 // ─── Импорты вынесенных модулей ───────────────────────────
 import 'models/subscription.dart';          // ServerRow, SubscriptionItem
-import 'models/vpn_state.dart';              // VpnState enum, ServerStatus, ParseResult
 import 'utils/constants.dart';              // цвета, строки
-import 'utils/helpers.dart';                // getUserFriendlyError
+import 'utils/helpers.dart';                // getUserFriendlyError, SubException
 import 'widgets/glass_card.dart';           // GlassCard, GlassIconButton, AmbientOrb
 import 'widgets/connection_status_panel.dart'; // ConnectionStatusPanel
+import 'widgets/subscription_card.dart';    // SubscriptionCard
+import 'widgets/start_button.dart';         // StartButton
+import 'controllers/subscription_controller.dart'; // SubscriptionController
 
 // ═══════════════════════════════════════════════════════════
 //  VYRE VPN — 2026 CYBER-GLASS AESTHETIC (fixed build)
 // ═══════════════════════════════════════════════════════════
-
-/// Бизнес-ошибка подписки: не проходит через getUserFriendlyError,
-/// показывается пользователю как есть.
-class SubException implements Exception {
-  final String message;
-  SubException(this.message);
-  @override
-  String toString() => message;
-}
 
 void main() {
   runApp(const VYREApp());
@@ -95,43 +84,14 @@ class VYREHome extends StatefulWidget {
 class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   late final VpnService _vpn;
   final TextEditingController _subController = TextEditingController();
-
-  // ─── Состояние VPN ──────────────────────────────────────────
-  List<ServerRow> _servers = [];
-  String _error = '';
-  VpnState _vpnState = VpnState.initializing;
-  bool get _connected => _vpnState.isConnected;
-  bool get _testing => _vpnState == VpnState.testing;
-  bool get _isConnecting => _vpnState.isBusy;
-  int? get _bestDelayMs {
-    if (_servers.isEmpty) return null;
-    final positive = _servers.where((s) => s.delayMs >= 0).toList();
-    if (positive.isEmpty) return null;
-    return positive.map((s) => s.delayMs).reduce((a, b) => a < b ? a : b);
-  }
-
-  String? _extractProtocol(String config) {
-    try {
-      final Map<String, dynamic> json = jsonDecode(config);
-      final outbounds = json['outbounds'] as List?;
-      if (outbounds != null && outbounds.isNotEmpty) {
-        final p = outbounds[0]['protocol'];
-        if (p is String) return p.toUpperCase();
-      }
-    } catch (_) {}
-    return null;
-  }
-
-  String _notice = '';
-  String? _connectedServer;
-  String? _connectedProtocol;
+  late SubscriptionController _controller;
 
   final SubscriptionRepository _repo = SubscriptionRepository();
   late final SubscriptionService _subs = SubscriptionService(_subCache);
   final SubscriptionCache _subCache = SubscriptionCache();
-  bool _isInitialized = false;
-  bool _disposed = false;       // 🔒 защита async-хвостов после dispose
-  bool _cancelRequested = false;
+  late DefaultSubscriptionStorage _subStorage;
+  SubscriptionStorageState? _subscriptionStorageState;
+  bool _showStorageBanner = false;
 
   List<AppInfo> _allApps = [];
   Set<String> _vpnRoutedPackages = {}; // приложения, которые пускаем через VPN
@@ -141,49 +101,37 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   List<SubscriptionItem> _subscriptions = [];
   String? _activeSubscriptionId;
 
-  late AnimationController _pulseController;
-  late AnimationController _glowController;
-  late Animation<double> _pulseAnim;
-  late Animation<double> _glowAnim;
-
   @override
   void initState() {
     super.initState();
     _vpn = VpnService(
       onStateChanged: (state, raw) {
         if (!mounted) return;
-        setState(() => _vpnState = state);
-        _syncPulse();
+        _controller.updateVpnState(state);
       },
     );
 
-    _pulseController = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000));
-    _glowController = AnimationController(vsync: this, duration: const Duration(milliseconds: 3000));
-    _pulseAnim = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOutSine),
-    );
-    _glowAnim = Tween<double>(begin: 0.3, end: 0.7).animate(
-      CurvedAnimation(parent: _glowController, curve: Curves.easeInOutSine),
+    _controller = SubscriptionController(
+      vpnService: _vpn,
+      inputController: _subController,
+      subscriptionService: _subs,
+      qrScannerBuilder: (_) => const QrScannerScreen(),
     );
 
-    _glowController.repeat(reverse: true);
-
-    _initEngine();
+    _controller.initialize();
     _loadAppsIfNeeded();
     _loadSavedSelection();
     _loadPreferences();
+    _detectStorageState();
   }
 
   @override
   void dispose() {
-    _disposed = true;
     // ⚠️ ПРОДУКТОВОЕ РЕШЕНИЕ: VPN-туннель НЕ останавливаем при выходе с экрана.
     // Сервис flutter_v2ray живёт в фоне — пользователь ожидает, что VPN
     // продолжит работать после сворачивания приложения.
     // Если нужно гасить туннель вместе с UI — раскомментируйте:
-    // if (_isInitialized) _v2ray.stopV2Ray();
-    _pulseController.dispose();
-    _glowController.dispose();
+    // if (_vpnState != VpnState.disconnected) _v2ray.stopV2Ray();
     _subController.dispose();
     super.dispose();
   }
@@ -202,21 +150,37 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> _initEngine() async {
+  Future<void> _detectStorageState() async {
     try {
-      await _vpn.initialize();
+      _subStorage = DefaultSubscriptionStorage(
+        secure: FlutterSecureStorageAdapter(),
+        prefs: await SharedPreferences.getInstance(),
+      );
+      final state = await _subStorage.readState();
       if (!mounted) return;
       setState(() {
-        _isInitialized = true;
-        _vpnState = VpnState.disconnected;
+        _subscriptionStorageState = state;
+        if (state.isStorageLoss) {
+          _showStorageBanner = true;
+        } else if (state.status == SubscriptionStorageStatus.anomaly) {
+          debugPrint('VYRE: subscription storage anomaly — secret exists but imported=false');
+        }
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = getUserFriendlyError(e);
-        _vpnState = VpnState.disconnected;
-      });
+      debugPrint('VYRE: failed to detect subscription storage state: $e');
     }
+  }
+
+  void _dismissStorageBanner() {
+    setState(() => _showStorageBanner = false);
+    if (_subscriptionStorageState?.status == SubscriptionStorageStatus.storageLoss) {
+      _subStorage.writeMetadata(imported: false);
+    }
+  }
+
+  void _focusSubscriptionField() {
+    FocusScope.of(context).requestFocus(FocusNode());
+    _subController.selection = TextSelection(baseOffset: 0, extentOffset: _subController.text.length);
   }
 
   Future<void> _loadAppsIfNeeded() async {
@@ -309,23 +273,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   // ─── Генерация ID (с разделителем, без коллизий склейки) ───
   String _generateId() =>
       '${DateTime.now().millisecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}';
-
-
   /// Центральное управление пульсацией: безопасно при dispose и повторных вызовах.
-  void _syncPulse() {
-    if (!mounted || _disposed) return;
-    try {
-      final shouldAnimate = _testing || _connected;
-      if (shouldAnimate && !_pulseController.isAnimating) {
-        _pulseController.repeat(reverse: true);
-      } else if (!shouldAnimate && _pulseController.isAnimating) {
-        _pulseController.stop();
-        _pulseController.reset();
-      }
-    } catch (_) {
-      // контроллер мог быть уничтожен — игнорируем
-    }
-  }
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -340,11 +288,15 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
       } else {
         if (!mounted) return;
-        setState(() => _error = 'Не удалось открыть Telegram-канал');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Не удалось открыть Telegram-канал'), backgroundColor: Colors.orange),
+        );
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = getUserFriendlyError(e));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(getUserFriendlyError(e)), backgroundColor: Colors.orange),
+      );
     }
   }
 
@@ -744,142 +696,26 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
     );
   }
 
-
-
   // ─── Основной метод подключения ───────────────────────────
   Future<void> _connect() async {
-    if (!mounted || _isConnecting) return;
-
-    if (!_isInitialized) {
-      setState(() => _error = 'Движок не инициализирован');
-      return;
-    }
+    if (!mounted || _controller.isBusy) return;
 
     final subUrl = _subController.text.trim();
-    if (subUrl.isEmpty) {
-      setState(() => _error = 'Введите ссылку подписки');
-      return;
-    }
+    if (!_controller.validateInput(subUrl)) return;
 
-    setState(() {
-      _error = '';
-      _servers = [];
-      _vpnState = VpnState.testing;
-    });
-
-    // Единая точка сохранения/активации подписки
     _addSubscription(subUrl);
 
+    List<String>? blockedAppsList;
+    if (_vpnRoutedPackages.isNotEmpty && _appsLoaded && _allApps.isNotEmpty) {
+      blockedAppsList = _allApps
+          .map((app) => app.packageName)
+          .where((pkg) => !_vpnRoutedPackages.contains(pkg))
+          .toList();
+    }
+
     try {
-      _cancelRequested = false;
-      _syncPulse();
-
-      final bool isSingle = SubscriptionService.isSingleLink(subUrl);
-      final lower = subUrl.toLowerCase();
-      String body;
-
-      if (lower.startsWith('http://') || lower.startsWith('https://')) {
-        body = await _subs.fetch(subUrl);
-      } else {
-        body = subUrl;
-      }
-
-      final List<V2RayURL> parsed = _subs.parseToV2RayUrls(body, isSingleLink: isSingle);
-      if (parsed.isEmpty) {
-        throw SubException('Подписка не содержит серверов');
-      }
-
-      // ─── Валидация конфигов перед пингом ────
-      final validator = ConfigValidator();
-      final List<V2RayURL> validParsed = [];
-      int invalidCount = 0;
-
-      for (final p in parsed) {
-        try {
-          final cfg = p.getFullConfiguration();
-          validator.validate(jsonDecode(cfg));
-          validParsed.add(p);
-        } on ConfigValidationException {
-          invalidCount++;
-        } catch (_) {
-          invalidCount++;
-        }
-      }
-
-      if (validParsed.isEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _error = 'Все серверы в подписке невалидны';
-          _vpnState = VpnState.disconnected;
-        });
-        _syncPulse();
-        return;
-      }
-
-      if (invalidCount > 0) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Отфильтровано невалидных серверов: $invalidCount'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-
-      // ─── Тестируем серверы, не более 5 одновременно ────
-      final List<ServerRow> rows = [];
-      final List<Future<void>> futures = [];
-      final semaphore = Semaphore(5);
-
-      for (final p in validParsed) {
-        futures.add(
-          semaphore.withPermit(() async {
-            if (_cancelRequested) return;
-            final rawCfg = p.getFullConfiguration();
-            try {
-              final cfg = ConfigNormalizer().normalize(rawCfg);
-              int ms = -1;
-              try {
-                ms = await _vpn.pingServer(cfg);
-              } catch (_) {}
-              rows.add(ServerRow(remark: p.remark, config: cfg, delayMs: ms));
-            } on ConfigNormalizationException {
-              // Сервер отклонён нормализатором, не добавляем в rows
-            }
-          }),
-        );
-      }
-
-      try {
-        await Future.wait(futures).timeout(const Duration(seconds: 30));
-      } on TimeoutException {
-        // продолжаем с тем, что успело собраться в rows
-      }
-
-      // ─── Сортировка: сначала успешные, потом остальные ────
-      final selector = ServerSelector();
-      final sortedRows = selector.sort(rows);
-
-      if (!mounted) return;
-      setState(() {
-        _servers = sortedRows;
-        _vpnState = VpnState.disconnected;
-      });
-      _syncPulse();
-
-      // ─── Выбираем лучший сервер ──────
-      final ServerRow? bestCandidate = selector.selectBest(sortedRows);
-      final ServerRow best = bestCandidate ?? rows.firstWhere((r) => r.config.isNotEmpty, orElse: () => rows.first);
-
-      // ─── Сохраняем display-состояние выбранного сервера ──────
-      setState(() {
-        _connectedServer = best.remark.isEmpty ? 'VYRE' : best.remark;
-        _connectedProtocol = _extractProtocol(best.config);
-        _notice = '';
-      });
-
-      // ─── Split-tunneling: guard от пустого списка приложений ──────
-      if (bestCandidate == null) {
+      await _controller.loadAndTest(subUrl);
+      if (_controller.allServersUnavailable) {
         if (!mounted) return;
         await showDialog(
           context: context,
@@ -891,87 +727,30 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             ],
           ),
         );
-        _syncPulse();
         return;
       }
 
-      // ─── Split-tunneling: guard от пустого списка приложений ──────
-      List<String>? blockedAppsList;
-      if (_vpnRoutedPackages.isNotEmpty && _appsLoaded && _allApps.isNotEmpty) {
-        blockedAppsList = _allApps
-            .map((app) => app.packageName)
-            .where((pkg) => !_vpnRoutedPackages.contains(pkg))
-            .toList();
-      }
-
-      final granted = await _vpn.requestPermission();
+      if (_controller.error.isNotEmpty) return;
       if (!mounted) return;
-      if (!granted) {
-        setState(() {
-          _error = 'Нет прав на VPN (отклонено)';
-          _vpnState = VpnState.disconnected;
-        });
-        _syncPulse();
-        return;
-        }
-
-        setState(() { _vpnState = VpnState.connecting; });
-        await _vpn.connect(
-        remark: best.remark.isEmpty ? 'VYRE' : best.remark,
-        config: best.config,
-        blockedApps: blockedAppsList,
-      );
+      await _controller.connect(context, blockedApps: blockedAppsList);
     } catch (e) {
-      if (!mounted) return;
-      try {
-        await _vpn.disconnect();
-      } catch (_) {}
-      setState(() {
-        _error = e is SubException ? e.message : getUserFriendlyError(e);
-        _vpnState = VpnState.disconnected;
-      });
-      _syncPulse();
+      // error уже установлен в контроллере
     }
   }
 
   Future<void> _disconnect() async {
-    try {
-      await _vpn.disconnect();
-      _syncPulse();
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = getUserFriendlyError(e));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _connectedServer = null;
-          _connectedProtocol = null;
-          _notice = '';
-        });
-      }
-    }
+    await _controller.disconnect();
   }
 
   Future<void> _cancelTesting() async {
-    setState(() {
-      _cancelRequested = true;
-      _vpnState = VpnState.disconnected;
-      _notice = 'Тестирование отменено';
-    });
-    _syncPulse();
+    await _controller.cancel();
   }
 
   // ─── QR-сканер ─────────────────────────────────────────────
   Future<void> _openQrScanner() async {
-    final result = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-    );
+    final result = await _controller.scanQr(context);
     if (result != null && result.isNotEmpty && mounted) {
-      setState(() {
-        _subController.text = result;
-        _error = '';
-      });
+      _controller.updateInput(result);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Подписка добавлена'),
@@ -1019,13 +798,10 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   // ─── Вставка из буфера ────────────────────────────────────
   Future<void> _pasteFromClipboard() async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = await _controller.paste();
     if (!mounted) return;
-    if (data?.text != null && data!.text!.isNotEmpty) {
-      setState(() {
-        _subController.text = data.text!;
-        _error = '';
-      });
+    if (text != null && text.isNotEmpty) {
+      _controller.updateInput(text);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Подписка добавлена в поле. Нажмите СТАРТ для подключения.'),
@@ -1046,9 +822,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _connected ? kSuccess : kDanger;
-    final statusGlow = _connected ? kGlowCyan : kGlowPurple;
-    final bool canStart = !_connected && !_testing && !_isConnecting && _isInitialized;
+    final bool canStart = _controller.vpnState.canStart;
 
     return Scaffold(
       backgroundColor: kVoid,
@@ -1114,7 +888,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             left: -100,
             child: AmbientOrb(
               size: 300,
-              color: _connected ? kAccentCyan.withValues(alpha: 0.12) : kAccentPurple.withValues(alpha: 0.10),
+              color: _controller.isConnected ? kAccentCyan.withValues(alpha: 0.12) : kAccentPurple.withValues(alpha: 0.10),
             ),
           ),
           Positioned(
@@ -1122,7 +896,7 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
             right: -80,
             child: AmbientOrb(
               size: 250,
-              color: _connected ? kAccentPurple.withValues(alpha: 0.08) : kAccentMagenta.withValues(alpha: 0.06),
+              color: _controller.isConnected ? kAccentPurple.withValues(alpha: 0.08) : kAccentMagenta.withValues(alpha: 0.06),
             ),
           ),
           SafeArea(
@@ -1141,166 +915,36 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const SizedBox(height: 20),
-                              GlassCard(
-                                padding: const EdgeInsets.all(kSpace3),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.link, size: 18, color: kAccentCyan),
-                                        const SizedBox(width: 8),
-                                        const Text('Подключение', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: kTextSecondary)),
-                                      ],
-                                    ),
-                                    if (_subController.text.isEmpty && _servers.isEmpty) ...[
-                                      const SizedBox(height: kSpace2),
-                                      const Text(
-                                        'Вставьте ссылку на подписку\nили используйте QR-код сверху',
-                                        style: TextStyle(color: kTextMuted, fontSize: 13),
-                                      ),
-                                    ],
-                                    const SizedBox(height: kSpace2),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(14),
-                                      child: BackdropFilter(
-                                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-                                        child: TextField(
-                                          controller: _subController,
-                                          onChanged: (_) => setState(() { _error = ''; }),
-                                          style: const TextStyle(color: kTextPrimary, fontSize: 14),
-                                          decoration: InputDecoration(
-                                            filled: true,
-                                            fillColor: Colors.white.withValues(alpha: 0.03),
-                                            hintText: 'Вставьте URL подписки',
-                                            hintStyle: const TextStyle(color: kTextMuted),
-                                            border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(14),
-                                              borderSide: BorderSide.none,
-                                            ),
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                            suffixIcon: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(Icons.content_paste, size: 20, color: kTextSecondary),
-                                                  onPressed: _pasteFromClipboard,
-                                                  tooltip: 'Вставить',
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                              if (_showStorageBanner && _subscriptionStorageState != null)
+                                _StorageLossBanner(
+                                  onImport: _focusSubscriptionField,
+                                  onDismiss: _dismissStorageBanner,
                                 ),
+                              SubscriptionCard(
+                                controller: _subController,
+                                onPaste: _pasteFromClipboard,
+                                onScanQr: _openQrScanner,
+                                isTesting: _controller.isTesting,
+                                onChanged: (_) => _controller.dismissError(),
                               ),
                               const SizedBox(height: kSpace4),
-                              Center(
-                                child: AnimatedBuilder(
-                                  animation: Listenable.merge([_pulseAnim, _glowAnim]),
-                                  builder: (context, child) {
-                                    final isPulsing = _testing || _connected;
-                                    final scale = isPulsing ? _pulseAnim.value : 1.0;
-                                    return Semantics(
-                                      button: true,
-                                      label: _connected
-                                          ? 'Отключиться от VPN'
-                                          : (_testing || _isConnecting ? 'Отменить' : 'СТАРТ'),
-                                      enabled: _connected || canStart || _testing || _isConnecting,
-                                      child: GestureDetector(
-                                        onTap: _connected
-                                            ? _disconnect
-                                            : ((_testing || _isConnecting) ? _cancelTesting : (canStart ? _connect : null)),
-                                      child: SizedBox(
-                                        width: 220,
-                                        height: 220,
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Container(
-                                              width: 220 * scale,
-                                              height: 220 * scale,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: RadialGradient(
-                                                  colors: [
-                                                    statusGlow.withValues(alpha: _glowAnim.value),
-                                                    statusGlow.withValues(alpha: 0.0),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 180,
-                                              height: 180,
-                                              decoration: BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: LinearGradient(
-                                                  colors: _connected
-                                                      ? [
-                                                          kAccentCyan.withValues(alpha: 0.3),
-                                                          kAccentPurple.withValues(alpha: 0.2),
-                                                        ]
-                                                      : [kSurfaceLight, kSurface],
-                                                  begin: Alignment.topLeft,
-                                                  end: Alignment.bottomRight,
-                                                ),
-                                                border: Border.all(
-                                                  color: _connected ? kAccentCyan.withValues(alpha: 0.4) : kGlassBorder,
-                                                  width: 1.5,
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: statusColor.withValues(alpha: 0.25),
-                                                    blurRadius: 40,
-                                                    spreadRadius: 4,
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Center(
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  children: [
-                                                    Icon(
-                                                      _connected
-                                                          ? Icons.stop_rounded
-                                                          : ((_testing || _isConnecting) ? Icons.close_rounded : Icons.play_arrow_rounded),
-                                                      size: 56,
-                                                      color: (_testing || _isConnecting) ? kDanger : (_connected ? kDanger : kTextPrimary),
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text(
-                                                      _connected ? 'СТОП' : ((_testing || _isConnecting) ? 'ОТМЕНА' : 'СТАРТ'),
-                                                      style: const TextStyle(
-                                                        fontSize: 13,
-                                                        fontWeight: FontWeight.w800,
-                                                        letterSpacing: 2,
-                                                        color: kTextSecondary,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: kSpace3),
+                              StartButton(
+                                vpnState: _controller.vpnState,
+                                isConnected: _controller.isConnected,
+                                canStart: canStart,
+                                onStart: _connect,
+                                onStop: _disconnect,
+                                onCancel: _cancelTesting,
+                              ),
+                              const SizedBox(height: kSpace3),
                           ConnectionStatusPanel(
-                            vpnState: _vpnState,
-                            notice: _notice.isEmpty ? null : _notice,
-                            error: _error.isEmpty ? null : _error,
-                            serversCount: _servers.length,
-                            bestDelayMs: _bestDelayMs,
-                            connectedServer: _connectedServer,
-                            connectedProtocol: _connectedProtocol,
+                            vpnState: _controller.vpnState,
+                            notice: _controller.notice.isEmpty ? null : _controller.notice,
+                            error: _controller.error.isEmpty ? null : _controller.error,
+                            serversCount: _controller.servers.length,
+                            bestDelayMs: _controller.bestDelayMs,
+                            connectedServer: _controller.connectedServer,
+                            connectedProtocol: _controller.connectedProtocol,
                             hasSubscription: _subController.text.isNotEmpty,
                           ),
                           const SizedBox(height: kSpace3),
@@ -1318,30 +962,66 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
   }
 }
 
-// ─── Semaphore: корректный ограничитель параллелизма ────────
-class Semaphore {
-  final int maxConcurrency;
-  int _current = 0;
-  final List<Completer<void>> _queue = [];
+class _StorageLossBanner extends StatelessWidget {
+  final VoidCallback onImport;
+  final VoidCallback onDismiss;
 
-  Semaphore(this.maxConcurrency);
+  const _StorageLossBanner({
+    required this.onImport,
+    required this.onDismiss,
+  });
 
-  Future<void> withPermit(Future<void> Function() action) async {
-    // while (а не if): проснувшись, перепроверяем свободен ли слот
-    while (_current >= maxConcurrency) {
-      final completer = Completer<void>();
-      _queue.add(completer);
-      await completer.future;
-    }
-    _current++;
-    try {
-      await action();
-    } finally {
-      _current--;
-      if (_queue.isNotEmpty) {
-        _queue.removeAt(0).complete();
-      }
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: kSpace3),
+      padding: const EdgeInsets.all(kSpace3),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(kRadiusCard),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+          const SizedBox(width: kSpace2),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Подписка не читается',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: kTextPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Зашифрованное хранилище было сброшено или повреждено, например после переустановки приложения. '
+                      'Данные подписки восстановить невозможно, импортируйте ссылку заново.',
+                  style: const TextStyle(fontSize: 12, color: kTextSecondary, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: kSpace2),
+          TextButton(
+            onPressed: onImport,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text('Импортировать заново'),
+          ),
+          TextButton(
+            onPressed: onDismiss,
+            style: TextButton.styleFrom(
+              foregroundColor: kTextMuted,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            child: const Text('Понятно'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

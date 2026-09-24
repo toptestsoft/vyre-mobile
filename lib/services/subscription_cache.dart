@@ -8,8 +8,8 @@ abstract class SecureStorage {
   Future<void> delete({required String key});
 }
 
-class _FlutterSecureStorageAdapter extends FlutterSecureStorage implements SecureStorage {
-  _FlutterSecureStorageAdapter() : super();
+class FlutterSecureStorageAdapter extends FlutterSecureStorage implements SecureStorage {
+  FlutterSecureStorageAdapter() : super();
 }
 
 /// Кэш последней УСПЕШНОЙ подписки в защищенном хранилище.
@@ -19,7 +19,7 @@ class SubscriptionCache {
   static const _chunkSize = 12000;
 
   SubscriptionCache({SecureStorage? secureStorage})
-      : _secure = secureStorage ?? _FlutterSecureStorageAdapter();
+      : _secure = secureStorage ?? FlutterSecureStorageAdapter();
 
   Future<String> _keyFor(String subUrl) async {
     final bytes = utf8.encode(subUrl);
