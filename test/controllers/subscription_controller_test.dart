@@ -42,7 +42,6 @@ class FakeSubscriptionServiceEmpty implements SubscriptionService {
 
   FakeSubscriptionServiceEmpty(this.cache);
 
-  @override
   bool isSingleLink(String url) => false;
 
   @override
@@ -63,7 +62,6 @@ class FakeSubscriptionService implements SubscriptionService {
 
   FakeSubscriptionService(this.cache);
 
-  @override
   bool isSingleLink(String url) => false;
 
   @override
