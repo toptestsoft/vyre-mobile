@@ -822,96 +822,99 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final bool canStart = _controller.vpnState.canStart;
+    return ListenableBuilder(
+      listenable: _controller,
+      builder: (context, child) {
+        final bool canStart = _controller.vpnState.canStart;
 
-    return Scaffold(
-      backgroundColor: kVoid,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF0a0a1a),
-                    Color(0xFF1a1a3a),
-                    Color(0xFF2d1f6e),
-                    Color(0xFF7c4dff),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: const Color(0xFF7c4dff).withValues(alpha: 0.6),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF7c4dff).withValues(alpha: 0.5),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: const Center(
-                child: Text('V', style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                )),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text('VYRE', style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 20,
-              letterSpacing: 1,
-              color: Colors.white,
-            )),
-          ],
-        ),
-        actions: [
-          GlassIconButton(icon: Icons.qr_code_scanner, onTap: _openQrScanner),
-          GlassIconButton(icon: Icons.settings, onTap: _showSettings),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Positioned(
-            top: -100,
-            left: -100,
-            child: AmbientOrb(
-              size: 300,
-              color: _controller.isConnected ? kAccentCyan.withValues(alpha: 0.12) : kAccentPurple.withValues(alpha: 0.10),
-            ),
-          ),
-          Positioned(
-            bottom: -80,
-            right: -80,
-            child: AmbientOrb(
-              size: 250,
-              color: _controller.isConnected ? kAccentPurple.withValues(alpha: 0.08) : kAccentMagenta.withValues(alpha: 0.06),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight,
+        return Scaffold(
+          backgroundColor: kVoid,
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF0a0a1a),
+                        Color(0xFF1a1a3a),
+                        Color(0xFF2d1f6e),
+                        Color(0xFF7c4dff),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF7c4dff).withValues(alpha: 0.6),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF7c4dff).withValues(alpha: 0.5),
+                        blurRadius: 8,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text('V', style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                    )),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('VYRE', style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 20,
+                  letterSpacing: 1,
+                  color: Colors.white,
+                )),
+              ],
+            ),
+            actions: [
+              GlassIconButton(icon: Icons.qr_code_scanner, onTap: _openQrScanner),
+              GlassIconButton(icon: Icons.settings, onTap: _showSettings),
+              const SizedBox(width: 8),
+            ],
+          ),
+          body: Stack(
+            children: [
+              Positioned(
+                top: -100,
+                left: -100,
+                child: AmbientOrb(
+                  size: 300,
+                  color: _controller.isConnected ? kAccentCyan.withValues(alpha: 0.12) : kAccentPurple.withValues(alpha: 0.10),
+                ),
+              ),
+              Positioned(
+                bottom: -80,
+                right: -80,
+                child: AmbientOrb(
+                  size: 250,
+                  color: _controller.isConnected ? kAccentPurple.withValues(alpha: 0.08) : kAccentMagenta.withValues(alpha: 0.06),
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const SizedBox(height: 20),
@@ -937,31 +940,32 @@ class _VYREHomeState extends State<VYREHome> with TickerProviderStateMixin {
                                 onCancel: _cancelTesting,
                               ),
                               const SizedBox(height: kSpace3),
-                          ConnectionStatusPanel(
-                            vpnState: _controller.vpnState,
-                            notice: _controller.notice.isEmpty ? null : _controller.notice,
-                            error: _controller.error.isEmpty ? null : _controller.error,
-                            serversCount: _controller.servers.length,
-                            bestDelayMs: _controller.bestDelayMs,
-                            connectedServer: _controller.connectedServer,
-                            connectedProtocol: _controller.connectedProtocol,
-                            hasSubscription: _subController.text.isNotEmpty,
+                              ConnectionStatusPanel(
+                                vpnState: _controller.vpnState,
+                                notice: _controller.notice.isEmpty ? null : _controller.notice,
+                                error: _controller.error.isEmpty ? null : _controller.error,
+                                serversCount: _controller.servers.length,
+                                bestDelayMs: _controller.bestDelayMs,
+                                connectedServer: _controller.connectedServer,
+                                connectedProtocol: _controller.connectedProtocol,
+                                hasSubscription: _subController.text.isNotEmpty,
+                              ),
+                              const SizedBox(height: kSpace3),
+                            ],
                           ),
-                          const SizedBox(height: kSpace3),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
 class _StorageLossBanner extends StatelessWidget {
   final VoidCallback onImport;
   final VoidCallback onDismiss;
