@@ -54,5 +54,13 @@ veil_test.iml
 *.bak
 android/app/keystore.jks
 android/key.properties
+
+# Keystore files by extension
+*.jks
+*.keystore
+*.jceks
+*.p12
+*.pfx
+
 lib/build/
 build/
