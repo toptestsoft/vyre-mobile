@@ -28,6 +28,8 @@ class SubscriptionController extends ChangeNotifier {
   String? _connectedProtocol;
   bool _cancelRequested = false;
   SubscriptionItem? _activeSub;
+  bool _disposed = false;
+  bool _hasActiveRequest = false;
 
   SubscriptionController({
     required this.vpnService,
@@ -118,6 +120,7 @@ class SubscriptionController extends ChangeNotifier {
     _servers = [];
     _vpnState = VpnState.testing;
     _cancelRequested = false;
+    _hasActiveRequest = true;
     notifyListeners();
 
     try {
@@ -131,12 +134,30 @@ class SubscriptionController extends ChangeNotifier {
         body = url;
       }
 
+      if (_cancelRequested) {
+        _vpnState = VpnState.disconnected;
+        _connectedServer = null;
+        _connectedProtocol = null;
+        _notice = 'Тестирование отменено';
+        notifyListeners();
+        return;
+      }
+
       final List<V2RayURL> parsed = subscriptionService.parseToV2RayUrls(
         body,
         isSingleLink: isSingle,
       );
       if (parsed.isEmpty) {
         throw SubException('Подписка не содержит серверов');
+      }
+
+      if (_cancelRequested) {
+        _vpnState = VpnState.disconnected;
+        _connectedServer = null;
+        _connectedProtocol = null;
+        _notice = 'Тестирование отменено';
+        notifyListeners();
+        return;
       }
 
       // Валидация конфигов перед пингом
@@ -168,6 +189,15 @@ class SubscriptionController extends ChangeNotifier {
         notifyListeners();
       }
 
+      if (_cancelRequested) {
+        _vpnState = VpnState.disconnected;
+        _connectedServer = null;
+        _connectedProtocol = null;
+        _notice = 'Тестирование отменено';
+        notifyListeners();
+        return;
+      }
+
       // Тестируем серверы, не более 5 одновременно
       final List<ServerRow> rows = [];
       final List<Future<void>> futures = [];
@@ -196,6 +226,14 @@ class SubscriptionController extends ChangeNotifier {
         await Future.wait(futures).timeout(const Duration(seconds: 30));
       } on TimeoutException {
         // продолжаем с тем, что успело собраться
+      }
+
+      if (_cancelRequested || _vpnState != VpnState.testing) {
+        return;
+      }
+
+      if (_vpnState == VpnState.connected) {
+        return;
       }
 
       final selector = ServerSelector();
@@ -268,8 +306,14 @@ class SubscriptionController extends ChangeNotifier {
   }
 
   Future<void> disconnect() async {
+    if (_vpnState == VpnState.disconnected) {
+      return;
+    }
+
     try {
-      await vpnService.disconnect();
+      await vpnService.disconnect().timeout(const Duration(seconds: 5));
+    } on TimeoutException {
+      // нативный disconnect завис — принудительно сбрасываем UI
     } catch (e) {
       _error = getUserFriendlyError(e);
     } finally {
@@ -283,14 +327,41 @@ class SubscriptionController extends ChangeNotifier {
 
   Future<void> cancel() async {
     _cancelRequested = true;
+
+    if (_vpnState == VpnState.connected || _vpnState == VpnState.connecting) {
+      try {
+        await vpnService.disconnect().timeout(const Duration(seconds: 5));
+      } on TimeoutException {
+        // игнорируем зависший stopV2Ray на cancel
+      } catch (_) {}
+    }
+
+    _servers = [];
+    _connectedServer = null;
+    _connectedProtocol = null;
     _vpnState = VpnState.disconnected;
     _notice = 'Тестирование отменено';
     notifyListeners();
   }
 
   void updateVpnState(VpnState state) {
+    if (_vpnState == VpnState.disconnected && state == VpnState.connected && !_hasActiveRequest) {
+      return;
+    }
     _vpnState = state;
     notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 
   String? _extractProtocol(String config) {

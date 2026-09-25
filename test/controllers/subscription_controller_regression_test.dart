@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_v2ray/flutter_v2ray.dart';
@@ -14,6 +15,7 @@ class FakeVpnService implements VpnService {
   bool connectCallsStop = false;
   bool disconnectHangs = false;
   bool throwOnDisconnect = false;
+  Completer<void>? pendingDisconnect;
 
   FakeVpnService(this.onStateChanged);
 
@@ -42,8 +44,11 @@ class FakeVpnService implements VpnService {
       throw Exception('native disconnect failed');
     }
     if (disconnectHangs) {
-      await Future.delayed(const Duration(days: 1));
+      pendingDisconnect = Completer<void>();
+      await pendingDisconnect!.future;
+      return;
     }
+    await Future<void>.delayed(const Duration(milliseconds: 10));
   }
 
   @override
@@ -97,7 +102,7 @@ void main() {
       fakeVpn.onStateChanged = (state, raw) => controller.updateVpnState(state);
 
       final loadFuture = controller.loadAndTest('https://example.com/sub');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
       fakeVpn.onStateChanged(VpnState.connected, 'CONNECTED');
 
       await loadFuture;
@@ -106,7 +111,8 @@ void main() {
           reason: 'Нативный CONNECTED во время testing должен сохраниться');
     });
 
-    test('cancel during testing must prevent connect and stop native tunnel', () async {
+    test('cancel during testing must prevent connect and stop native tunnel',
+        () async {
       final fakeVpn = FakeVpnService((state, raw) {});
       fakeVpn.connectCallsStop = true;
       final fakeSubs = FakeSubscriptionServiceConnectable(SubscriptionCache());
@@ -121,7 +127,7 @@ void main() {
       fakeVpn.onStateChanged = (state, raw) => controller.updateVpnState(state);
 
       final loadFuture = controller.loadAndTest('https://example.com/sub');
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
       await controller.cancel();
 
       await loadFuture;
@@ -133,7 +139,8 @@ void main() {
           reason: 'cancel() не должен допускать вызов connect() и CONNECTED');
     });
 
-    test('disconnect must complete even if native DISCONNECTED was already received', () async {
+    test('disconnect must complete even if native DISCONNECTED was already received',
+        () async {
       final fakeVpn = FakeVpnService((state, raw) {});
       fakeVpn.disconnectHangs = false;
       final controller = SubscriptionController(
@@ -180,7 +187,8 @@ void main() {
       expect(controller.vpnState, VpnState.disconnected);
     });
 
-    test('disconnect must complete within timeout even if native stop hangs', () async {
+    test('disconnect must complete within timeout even if native stop hangs',
+        () async {
       final fakeVpn = FakeVpnService((state, raw) {});
       fakeVpn.disconnectHangs = true;
       final controller = SubscriptionController(
@@ -197,13 +205,15 @@ void main() {
       await expectLater(
         controller.disconnect().timeout(const Duration(seconds: 6)),
         completes,
-        reason: 'disconnect() должен завершиться по таймауту, если нативный stop зависает',
+        reason:
+            'disconnect() должен завершиться по таймауту, если нативный stop зависает',
       );
 
       expect(controller.vpnState, VpnState.disconnected);
     });
 
-    test('disconnect must not hang if native DISCONNECTED arrives first after resume', () async {
+    test('disconnect must not hang if native DISCONNECTED arrives first after resume',
+        () async {
       final fakeVpn = FakeVpnService((state, raw) {});
       fakeVpn.disconnectHangs = true;
       final controller = SubscriptionController(
@@ -220,6 +230,7 @@ void main() {
       // Симулируем возврат из фона: нативный сервис уже разорван,
       // но disconnect() вызывается позже и может зависнуть на stopV2Ray().
       fakeVpn.onStateChanged(VpnState.disconnected, 'DISCONNECTED');
+      fakeVpn.pendingDisconnect?.complete();
 
       await expectLater(
         controller.disconnect().timeout(const Duration(seconds: 6)),
