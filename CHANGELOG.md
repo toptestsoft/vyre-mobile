@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2+4] - 2026-09-24
+
+### Fixed
+- Исправлен lifecycle native VPN connection: состояние CONNECTED больше не устанавливается до успешного TUN/tun2socks setup.
+- Исправлена обработка ошибки native service startup.
+- Улучшена устойчивость подключения и обратной связи при неуспешном запуске VPN.
+
 ## [1.1.1+3] - 2026-09-17
 
 ### Fixed
