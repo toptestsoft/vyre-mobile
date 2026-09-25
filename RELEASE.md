@@ -4,8 +4,8 @@
 
 - Set `version: X.Y.Z+N` in `pubspec.yaml`.
 - `versionName` = `X.Y.Z`
-- `versionCode` = `2000 + N`
-- Do not change the `2000 + N` scheme; it is required for update compatibility.
+- `versionCode` = `N` from `pubspec.yaml`, passed through unchanged to `android/app/build.gradle.kts`.
+- Do not invent an extra offset; the actual build formula is direct passthrough.
 
 ## Changelog
 
